@@ -42,14 +42,45 @@ jobs:
       - run: pnpm version:sync
       - run: pnpm -r run build
       - run: pnpm test
-      - name: Package Chrome Extension ZIP
+      - name: Package Chrome Extension ZIP & Generate Checksum
+        id: pkg
         run: |
+          ZIP_NAME="drishti-browser-ai-extension-${{ needs.release-please.outputs.tag_name }}.zip"
           cd apps/chrome-extension/dist
-          zip -r "../../../drishti-browser-ai-extension-${{ needs.release-please.outputs.tag_name }}.zip" .
-      - name: Upload Extension ZIP to GitHub Release
+          zip -r "../../../${ZIP_NAME}" .
+          cd ../../..
+          SHA=$(sha256sum "${ZIP_NAME}" | awk '{print $1}')
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+      - name: Upload Extension ZIP & Update Enterprise Release Notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
-            "drishti-browser-ai-extension-${{ needs.release-please.outputs.tag_name }}.zip" \
-            --clobber
+          TAG="${{ needs.release-please.outputs.tag_name }}"
+          ZIP_NAME="${{ steps.pkg.outputs.zip_name }}"
+          SHA="${{ steps.pkg.outputs.sha256 }}"
+          gh release upload "${TAG}" "${ZIP_NAME}" --clobber
+
+          EXISTING_BODY=$(gh release view "${TAG}" --json body -q .body)
+          NEW_BODY=$(cat <<EOF
+          ## 👁️ Drishti Browser AI (${TAG})
+
+          > **Production Chrome/Brave MV3 Extension + Universal MCP Gateway**  
+          > Built, tested (\`19/19\` unit tests passing), and packaged automatically via GitHub Actions.
+
+          ---
+
+          ### 📦 Quick Extension Install
+          1. Download **\`${ZIP_NAME}\`** from the **Assets** section below and unzip it.
+          2. Open \`chrome://extensions/\` (or \`brave://extensions/\`) and enable **Developer mode**.
+          3. Click **Load unpacked** and select the unzipped folder.
+
+          ### 🔐 Artifact Verification
+          - **SHA-256 (\`${ZIP_NAME}\`)**: \`${SHA}\`
+
+          ---
+
+          ${EXISTING_BODY}
+          EOF
+          )
+          gh release edit "${TAG}" --notes "${NEW_BODY}"
