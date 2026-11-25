@@ -1,4 +1,4 @@
-# 👁️ Drishti Browser AI (दृष्टि) — v0.1.0 PRO
+# 👁️ Drishti Browser AI (दृष्टि) — v0.1.1 PRO
 ### Universal AI Browser Automation Platform & Control Deck for Google Chrome & Brave via Model Context Protocol (MCP)
 
 [![MCP Protocol](https://img.shields.io/badge/MCP-v2024--11--05-blue?style=flat-square&logo=anthropic)](https://modelcontextprotocol.io)

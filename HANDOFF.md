@@ -1,6 +1,6 @@
 # Handoff — Drishti Browser AI (दृष्टि)
 
-Current version: 0.1.0
+Current version: 0.1.1
 
 ## Session: 2026-11-25
 
