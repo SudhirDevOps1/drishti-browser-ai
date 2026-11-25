@@ -244,6 +244,7 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
    - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
 3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
+4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
 
 ## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
 1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
@@ -790,6 +791,7 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
    - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
 3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
+4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
 
 ## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
 1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
