@@ -12,9 +12,7 @@
     "sidePanel",
     "notifications",
     "tabGroups",
-    "downloads"
-  ],
-  "optional_permissions": [
+    "downloads",
     "debugger"
   ],
   "host_permissions": [
