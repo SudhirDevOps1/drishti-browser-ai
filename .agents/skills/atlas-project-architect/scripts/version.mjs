@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ATLAS SSOT version tool — zero dependencies, Node 18+.
+ * ATLAS SSOT version tool — zero dependencies, Node 22+.
  *
  * Usage:
  *   node scripts/version.mjs bump <patch|minor|major|prerelease|alpha|beta|rc|stable>
@@ -35,6 +35,7 @@ const DRY = flags.has('--dry-run');
 const AS_JSON = flags.has('--json');
 const NO_CHANGELOG = flags.has('--no-changelog');
 const ALLOW_DOWNGRADE = flags.has('--allow-downgrade');
+const ALLOWED_FLAGS = new Set(['--dry-run', '--json', '--no-changelog', '--allow-downgrade', '--help']);
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(alpha|beta|rc)\.(0|[1-9]\d*))?$/;
 const RANK = { alpha: 0, beta: 1, rc: 2, stable: 3 };
@@ -49,6 +50,20 @@ class Exit extends Error {
 const die = (code, message) => {
   throw new Exit(code, message);
 };
+
+const unknownFlag = argv.find((a) => a.startsWith('--') && !ALLOWED_FLAGS.has(a));
+if (unknownFlag) {
+  console.error(
+    `Unknown flag "${unknownFlag}". Use --dry-run, --json, --no-changelog, --allow-downgrade or --help.`,
+  );
+  process.exit(2);
+}
+if (flags.has('--help')) {
+  console.log(
+    'Usage: version.mjs <bump|set|sync|verify|show> [arg] [--dry-run] [--json] [--no-changelog] [--allow-downgrade]',
+  );
+  process.exit(0);
+}
 
 /* ------------------------------------------------------------------ */
 /* text IO (BOM-safe, Windows-rename-safe, atomic)                    */
@@ -108,10 +123,14 @@ function parse(v) {
   if (!m) return null;
   const n = m[4] ? Number(m[5]) : 0;
   if (m[4] && n > MAX_PRERELEASE) return null;
+  const minor = Number(m[2]);
+  const patch = Number(m[3]);
+  // versionCode packs major*10000 + minor*100 + patch, so minor/patch must be 0-99.
+  if (minor > 99 || patch > 99) return null;
   return {
     major: Number(m[1]),
-    minor: Number(m[2]),
-    patch: Number(m[3]),
+    minor,
+    patch,
     channel: m[4] || 'stable',
     n,
   };
@@ -178,19 +197,93 @@ if (!fs.existsSync(ssotPath)) {
   process.exit(1);
 }
 
+/**
+ * Find the TOP-LEVEL `"version"` property in a JSON document.
+ *
+ * A regex cannot do this safely: npm's `version` lifecycle script lives at
+ * `scripts.version`, and it can appear before the root version. Matching the
+ * first `"version"` would then read or rewrite the script instead of the SSOT.
+ * This scanner tracks object/array depth and string state, so only depth 1
+ * counts, and it returns the exact value span to replace.
+ */
+function findTopLevelVersion(text) {
+  let depth = 0;
+  let i = 0;
+  let inString = false;
+  let escaped = false;
+  let stringStart = -1;
+
+  while (i < text.length) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        const raw = text.slice(stringStart, i + 1);
+        inString = false;
+
+        let key;
+        try {
+          key = JSON.parse(raw);
+        } catch {
+          key = null;
+        }
+
+        let j = i + 1;
+        while (j < text.length && /\s/.test(text[j])) j++;
+
+        if (depth === 1 && key === 'version' && text[j] === ':') {
+          let k = j + 1;
+          while (k < text.length && /\s/.test(text[k])) k++;
+          if (text[k] === '"') {
+            let v = k + 1;
+            let vEsc = false;
+            while (v < text.length) {
+              const c = text[v];
+              if (vEsc) vEsc = false;
+              else if (c === '\\') vEsc = true;
+              else if (c === '"') break;
+              v++;
+            }
+            if (v >= text.length) return null;
+            return { start: k + 1, end: v, value: JSON.parse(text.slice(k, v + 1)) };
+          }
+        }
+      }
+      i++;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      stringStart = i;
+    } else if (ch === '{' || ch === '[') {
+      depth++;
+    } else if (ch === '}' || ch === ']') {
+      depth--;
+    }
+    i++;
+  }
+
+  return null;
+}
+
 function readSSOT() {
   const { text } = readText(ssotPath);
-  const m = /"version"\s*:\s*"([^"]*)"/.exec(text);
-  if (!m) die(1, `Cannot read "version" from ${ssotLabel}`);
-  return m[1];
+  const found = findTopLevelVersion(text);
+  if (!found) die(1, `Cannot read the top-level "version" from ${ssotLabel}`);
+  return found.value;
 }
 
 function setSSOT(v) {
   if (DRY) return;
   const { text, bom } = readText(ssotPath);
-  const re = /("version"\s*:\s*")[^"]*(")/;
-  if (!re.test(text)) die(3, `Cannot find "version" in ${ssotLabel}`);
-  writeAtomic(ssotPath, text.replace(re, `$1${v}$2`), bom);
+  const found = findTopLevelVersion(text);
+  if (!found) die(3, `Cannot find the top-level "version" in ${ssotLabel}`);
+  writeAtomic(ssotPath, text.slice(0, found.start) + v + text.slice(found.end), bom);
 }
 
 /* ------------------------------------------------------------------ */

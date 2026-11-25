@@ -73,6 +73,7 @@ Load the reference file for the phase you're in. Don't load everything — that 
 | 10. Team | Delegate bounded work to specialist sub-agents; verify their reports | `references/11-agent-team.md` |
 
 Capability packs and external-tool trust tiers: `references/10-skill-matrix.md`.
+Browser extension, local bridge or MCP server: `references/12-browser-extension-mcp.md` — load it before changing a manifest, the bridge handshake, or a tool schema.
 Specialist team, role ownership and handoff: `references/11-agent-team.md`; human index: `ATLAS_AGENT_ROLE_MAP.md`. Delegate 2–4 roles per task, never all 15.
 
 ## Decision rules (short form)

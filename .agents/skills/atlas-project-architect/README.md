@@ -7,8 +7,10 @@ versioning and a handoff another agent can continue.
 ```text
 atlas-project-architect/
 ├── SKILL.md                  # the skill (loaded when triggered)
-├── references/               # phase detail, loaded on demand
-├── assets/templates/         # AGENTS.md, MEMORY.md, HANDOFF.md, ...
+├── references/               # 13 files: 10 phases + 3 domain packs, loaded on demand
+├── assets/templates/         # AGENTS.md, MEMORY.md, HANDOFF.md, ... (6)
+├── agent-roles.json          # single source of truth for the 15-role team
+├── agents/                   # 30 generated files: opencode/ + antigravity/
 └── scripts/version.mjs       # working SSOT version tool
 ```
 
@@ -53,7 +55,7 @@ GOAL · USERS · PLATFORM · DATA · BUDGET · DEADLINE
 ```
 
 Do not paste the references up front. `SKILL.md` loads one phase at a time; pasting all
-eleven costs 10–15× more context and produces a worse result.
+thirteen costs 10–15× more context and produces a worse result.
 
 For a chat UI with no filesystem, paste `SKILL.md` as the first message. Use
 `ATLAS-MASTER-PROMPT.md` when you want the whole rulebook in one paste.
@@ -81,8 +83,10 @@ pnpm run version:sync
 pnpm run version:verify
 ```
 
-It is dependency-free (Node 18+), atomic, idempotent, and skips surfaces the project
-does not have. A failed write restores every file it already touched.
+It is dependency-free (Node 22+), atomic, idempotent, and skips surfaces the project
+does not have. A failed write restores every file it already touched. It reads and writes
+only the top-level `"version"` — never a `scripts.version` hook — and refuses
+`minor`/`patch` above 99 so the Android-style `versionCode` cannot collide.
 
 ## Context cost
 
@@ -94,10 +98,12 @@ That is roughly 10–15% of the cost of pasting the full master prompt on every 
 
 ## Limits
 
-- Prompt-level behaviour. No automated eval suite exists; the version tool and installer
-  are the only tested code.
+- Prompt-level behaviour. No automated eval suite exists; the four CLIs (version,
+  installer, generator, setup) are the tested code.
 - No `--all` monorepo iteration in the bundled version tool — run it per package or use
   `pnpm -r run version:sync`.
 - The bundled tool never commits or tags. Git operations stay yours.
+- The setup tool is resumable, not transactional: a mid-run failure leaves completed
+  actions in place and prints how to resume.
 
 MIT licensed. Security policy: [`SECURITY.md`](../SECURITY.md).

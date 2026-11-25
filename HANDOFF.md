@@ -33,14 +33,11 @@ Current version: 0.1.0
     - `configs/agent-configs.md`
 
 ### Next Agent: Continue From Here
-1. Run `pnpm install` from project root
-2. Run `pnpm build` — fix any TypeScript errors
-3. Build remaining packages: `dom-engine`, `visual-engine`, `browser-core`
-4. Write tests in `tests/unit` and `tests/e2e`
-5. Create CI configuration (`.github/workflows/`)
-6. Write `docs/windows-install.md`, `docs/developer-setup.md`
-7. Create placeholder icons (128x128, 48x48, 16x16 PNG) in `apps/chrome-extension/public/icons/`
-8. Test the full flow: start bridge → install extension → connect agent → run a task
+1. Run `pnpm install && pnpm version:verify && pnpm -r run build`
+2. Run `pnpm test` (`19` Vitest unit tests) and `pnpm test:e2e` (Playwright Chromium E2E)
+3. To start the Local Bridge on demand: set `BRIDGE_AUTH_TOKEN` from `.drishti-token` and run `pnpm bridge:start`
+4. Load `apps/chrome-extension/dist` in `chrome://extensions` (Developer mode)
+5. See `AGENTS.md`, `TASKS.md`, and `docs/PROJECT-STATUS.md` for current rules and status.
 
 ### Build Order
 1. `packages/shared-types` (no deps)

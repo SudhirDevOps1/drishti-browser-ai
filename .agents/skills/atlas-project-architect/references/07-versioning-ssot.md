@@ -72,6 +72,10 @@ versionCode = base + channel + n      (n ≤ 99)
 
 `0.1.0-alpha.3` → 100003 · `0.1.0` → 100900 · `0.1.1-alpha.1` → 101001. Must be strictly increasing.
 
+Because the packing multiplies `minor` and `patch` by 100, both must be `0–99`. A version
+such as `1.100.0` or `2.0.0` would otherwise produce the same code (`20000900`), so the
+bundled tool rejects `minor`/`patch` above 99.
+
 ## Behaviour contract
 
 1. Validate SemVer + channel before writing.
@@ -118,5 +122,6 @@ These are behaviours the shipped script guarantees — verified by running it, n
 - **Badge-safe.** The README badge rewrite matches `badge/version-<semver>` with a strict channel allowlist, so the `-blue` colour suffix survives (an early version ate it).
 - **Changelog placement.** New entries go under `## [Unreleased]`, newest first; trailing blank lines are normalised; an existing entry for the version is not duplicated.
 - **Prerelease ceiling.** `n` is capped at 99 so `versionCode` cannot collide with the next patch; exceeding it exits `1`.
+- **Top-level key only.** `package.json#version` is read and written by a depth-aware scanner, so npm's `scripts.version` lifecycle hook — which can appear before the root key — is never mistaken for the SSOT. `show` reports the root version; `set` rewrites only the root value.
 - **Windows rename retry.** Atomic replace retries 5× with a short wait, because antivirus/indexer locks make `rename` transiently fail.
-- **Flags.** `--dry-run`, `--json`, `--no-changelog`, `--allow-downgrade`; flags may appear before or after the command.
+- **Flags.** `--dry-run`, `--json`, `--no-changelog`, `--allow-downgrade`, `--help`; flags may appear before or after the command. Any other flag exits `2` instead of being ignored.

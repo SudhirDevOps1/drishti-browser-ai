@@ -746,17 +746,20 @@ async function takeScreenshot(payload: Record<string, unknown>): Promise<unknown
 
 async function executeScript(payload: Record<string, unknown>): Promise<unknown> {
   const tabId = (payload.tabId as number | undefined) || (await resolveDefaultTabId());
-  const code = payload.code as string;
+  const code = String(payload.code || '').trim();
   if (!tabId || !code) throw new Error('tabId and code are required (or a valid target tab must exist)');
 
+  // MV3-safe read-only query handler (arbitrary script evaluation is disabled for Chrome Web Store & CSP compliance)
   const results = await chrome.scripting.executeScript({
     target: { tabId },
-    func: (snippet: string) => {
-      try {
-        return window.eval(snippet);
-      } catch (e: any) {
-        return { evalError: e.message };
-      }
+    func: (expr: string) => {
+      if (expr === 'document.title') return document.title;
+      if (expr === 'window.location.href' || expr === 'location.href') return window.location.href;
+      if (expr === 'document.readyState') return document.readyState;
+      return {
+        disabled: true,
+        error: 'Arbitrary script evaluation is disabled in MV3 hardened mode. Use structured MCP tools (GET_DOM_SNAPSHOT, GET_PAGE_INFO, CLICK, HOVER, TYPE, SCROLL).',
+      };
     },
     args: [code],
   });
