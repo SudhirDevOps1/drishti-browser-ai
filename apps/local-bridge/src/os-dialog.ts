@@ -52,7 +52,7 @@ $root = [System.Windows.Automation.AutomationElement]::RootElement
 
 while ((Get-Date) -lt $deadline) {
   $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, '#32770')
-  $dialogs = $root.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)
+  $dialogs = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
   foreach ($dlg in $dialogs) {
     try {
       $procId = $dlg.Current.ProcessId
