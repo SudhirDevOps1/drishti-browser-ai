@@ -222,6 +222,14 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
   }
 }
 
+## 0. FIRST-TIME TOKEN & SETUP (IF YOUR_AUTH_TOKEN)
+If BRIDGE_AUTH_TOKEN is "YOUR_AUTH_TOKEN":
+1. Generate a secure 64-character hex token via: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2. Save it to .drishti-token in the repo root, configure MCP with that token, and start the bridge on-demand (never install OS auto-start scripts).
+3. Print the generated token and guide the user step-by-step:
+   - Open chrome://extensions/ -> Developer mode -> Load unpacked -> select apps/chrome-extension/dist
+   - Open Drishti Settings -> Connection & Bridge -> paste token -> Save Changes -> Run Ping.
+
 ## 3. HOW TO EXECUTE USER TASKS
 When the user gives you any browser task (e.g. "Open Google, search Java DSA tutorials, compare top 3 sites & write a report"):
 1. Call browser_status() to verify connection and active tab.
@@ -741,6 +749,14 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
     }
   }
 }
+
+## 0. FIRST-TIME TOKEN & SETUP (IF YOUR_AUTH_TOKEN)
+If BRIDGE_AUTH_TOKEN is "YOUR_AUTH_TOKEN":
+1. Generate a secure 64-character hex token via: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+2. Save it to .drishti-token in the repo root, configure MCP with that token, and start the bridge on-demand (never install OS auto-start scripts).
+3. Print the generated token and guide the user step-by-step:
+   - Open chrome://extensions/ -> Developer mode -> Load unpacked -> select apps/chrome-extension/dist
+   - Open Drishti Settings -> Connection & Bridge -> paste token -> Save Changes -> Run Ping.
 
 ## 3. HOW TO EXECUTE USER TASKS
 When the user gives you any browser task (e.g. "Open Google, search Java DSA tutorials, compare top 3 sites & write a report"):
