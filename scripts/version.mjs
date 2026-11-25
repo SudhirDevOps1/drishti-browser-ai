@@ -233,6 +233,24 @@ const targets = [
     },
   },
   {
+    name: 'docs-windows-install',
+    file: 'docs/windows-install.md',
+    render: (v, p, text) => {
+      const next = text
+        .replace(/(\*\*Drishti Browser AI\*\*\s*\(`v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?(`\))/g, `$1${v}$2`)
+        .replace(/(Starting Drishti Browser AI Bridge v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?/g, `$1${v}`);
+      return next === text ? null : next;
+    },
+  },
+  {
+    name: 'docs-project-status',
+    file: 'docs/PROJECT-STATUS.md',
+    render: (v, p, text) => {
+      const next = text.replace(/(\*\*Version:\*\*\s*`)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?(`)/g, `$1${v}$2`);
+      return next === text ? null : next;
+    },
+  },
+  {
     name: 'chrome-manifest',
     file: 'apps/chrome-extension/public/manifest.json',
     render: (v, p, text) => {
