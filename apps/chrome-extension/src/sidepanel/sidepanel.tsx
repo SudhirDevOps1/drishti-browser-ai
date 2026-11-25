@@ -35,6 +35,14 @@ import {
   Download,
   Check,
   Copy,
+  Mic,
+  MicOff,
+  Plus,
+  Trash2,
+  Bookmark,
+  AlertTriangle,
+  WifiOff,
+  Hand,
 } from 'lucide-react';
 import { exportSessionScript, ExportFormat } from '../utils/script-exporter';
 import '../styles.css';
@@ -81,6 +89,27 @@ export interface MissionHistoryItem {
   stepCount: number;
 }
 
+export interface CustomMacroItem {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+export interface DevConsoleItem {
+  level: string;
+  message: string;
+  timestamp: number;
+  url?: string;
+}
+
+export interface DevNetworkErrorItem {
+  method: string;
+  url: string;
+  status: number;
+  message: string;
+  timestamp: number;
+}
+
 const QUICK_PROMPTS = [
   { label: 'Deep Research & Report', prompt: 'Search Google for Java DSA complete guide, extract top resources and synthesize comparison report' },
   { label: 'PDF & Doc Analysis', prompt: 'Analyze current PDF/Document structure, summarize all chapters and key algorithms' },
@@ -110,7 +139,130 @@ export function SidePanelApp() {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('playwright-ts');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+
+  // Voice Command Input state
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [voiceLang, setVoiceLang] = useState<'en-IN' | 'hi-IN'>('en-IN');
+  const [micPermissionNeeded, setMicPermissionNeeded] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Custom Saved Macros state
+  const [customMacros, setCustomMacros] = useState<CustomMacroItem[]>([]);
+  const [showMacroForm, setShowMacroForm] = useState<boolean>(false);
+  const [macroLabel, setMacroLabel] = useState<string>('');
+  const [macroPrompt, setMacroPrompt] = useState<string>('');
+
+  // Human Takeover & Cursor Speed state
+  const [humanTakeoverActive, setHumanTakeoverActive] = useState<boolean>(false);
+  const [cursorSpeed, setCursorSpeed] = useState<'natural' | 'demo' | 'fast'>('natural');
+
+  // Live Console & Network Error Drawer state
+  const [showDevDrawer, setShowDevDrawer] = useState<boolean>(false);
+  const [devFilter, setDevFilter] = useState<'all' | 'console' | 'network'>('all');
+  const [devConsoleLogs, setDevConsoleLogs] = useState<DevConsoleItem[]>([]);
+  const [devNetworkErrors, setDevNetworkErrors] = useState<DevNetworkErrorItem[]>([]);
+
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  const refreshDevTelemetry = () => {
+    chrome.runtime.sendMessage(
+      { type: 'GET_DEV_TELEMETRY', tabId: lockedTabId || activeTabId },
+      (res) => {
+        if (res?.success) {
+          setDevConsoleLogs(Array.isArray(res.consoleLogs) ? res.consoleLogs : []);
+          setDevNetworkErrors(Array.isArray(res.networkErrors) ? res.networkErrors : []);
+        }
+      }
+    );
+  };
+
+  const clearDevTelemetry = () => {
+    chrome.runtime.sendMessage({ type: 'CLEAR_DEV_TELEMETRY' }, () => {
+      setDevConsoleLogs([]);
+      setDevNetworkErrors([]);
+    });
+  };
+
+  const toggleVoiceInput = () => {
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRec =
+      (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
+
+    if (!SpeechRec) {
+      setDispatchBanner({ text: 'Voice recognition not supported in this browser context.', tone: 'error' });
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.lang = voiceLang;
+      recognition.interimResults = true;
+      recognition.continuous = false;
+
+      const baseText = taskPrompt.trim() ? taskPrompt.trim() + ' ' : '';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setMicPermissionNeeded(false);
+      };
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setTaskPrompt((baseText + transcript).trim());
+      };
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        const errCode = event?.error || 'unknown';
+        const needsMic = errCode === 'not-allowed' || errCode === 'service-not-allowed';
+        setMicPermissionNeeded(needsMic);
+        setDispatchBanner({
+          text: needsMic
+            ? 'Microphone permission required for Voice Input.'
+            : `Voice input error: ${errCode}`,
+          tone: 'error',
+        });
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        recognitionRef.current = null;
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+      setDispatchBanner({ text: `Could not start voice input: ${String(err)}`, tone: 'error' });
+    }
+  };
+
+  const handleSaveMacro = () => {
+    const label = macroLabel.trim();
+    const prompt = macroPrompt.trim();
+    if (!label || !prompt) return;
+    const next: CustomMacroItem[] = [
+      { id: 'mac-' + Date.now().toString(36), label, prompt },
+      ...customMacros,
+    ].slice(0, 20);
+    setCustomMacros(next);
+    chrome.storage.local.set({ customMacros: next });
+    setMacroLabel('');
+    setMacroPrompt('');
+    setShowMacroForm(false);
+  };
+
+  const handleDeleteMacro = (id: string) => {
+    const next = customMacros.filter((m) => m.id !== id);
+    setCustomMacros(next);
+    chrome.storage.local.set({ customMacros: next });
+  };
 
   const captureLivePreview = () => {
     setIsPreviewLoading(true);
@@ -171,16 +323,21 @@ export function SidePanelApp() {
   };
 
   useEffect(() => {
-    chrome.storage.local.get(['bridgeConnected', 'automationMode', 'automationEnabled', 'lockedTabId', 'missionHistory'], (res) => {
+    chrome.storage.local.get(['bridgeConnected', 'automationMode', 'automationEnabled', 'lockedTabId', 'missionHistory', 'customMacros', 'cursorSpeed'], (res) => {
       setConnected(!!res.bridgeConnected);
       if (res.automationMode) setMode(res.automationMode);
       if (res.automationEnabled !== undefined) setAutomationEnabled(!!res.automationEnabled);
       if (res.lockedTabId) setLockedTabId(res.lockedTabId);
       if (res.missionHistory) setHistory(res.missionHistory);
+      if (Array.isArray(res.customMacros)) setCustomMacros(res.customMacros);
+      if (res.cursorSpeed === 'fast' || res.cursorSpeed === 'demo' || res.cursorSpeed === 'natural') {
+        setCursorSpeed(res.cursorSpeed);
+      }
     });
 
     refreshTabs();
     refreshDownloads();
+    refreshDevTelemetry();
 
     const listener = (msg: {
       type: string;
@@ -193,7 +350,15 @@ export function SidePanelApp() {
       if (msg.type === 'CONNECTION_STATUS') {
         setConnected(!!msg.connected);
       }
+      if (msg.type === 'HUMAN_ACTIVITY') {
+        setHumanTakeoverActive(true);
+        setTimeout(() => setHumanTakeoverActive(false), 3500);
+      }
       if (msg.type === 'BRIDGE_ACTION') {
+        if (msg.category === 'TAKEOVER') {
+          setHumanTakeoverActive(true);
+          setTimeout(() => setHumanTakeoverActive(false), 3500);
+        }
         if (msg.category === 'AGENT' && msg.action) {
           setDispatchBanner({
             text: msg.action,
@@ -224,6 +389,14 @@ export function SidePanelApp() {
         }
         if (changes.lockedTabId !== undefined) {
           setLockedTabId(changes.lockedTabId.newValue || null);
+        }
+      }
+      if (area === 'session') {
+        if (changes.consoleLogs !== undefined && Array.isArray(changes.consoleLogs.newValue)) {
+          setDevConsoleLogs(changes.consoleLogs.newValue);
+        }
+        if (changes.networkErrors !== undefined && Array.isArray(changes.networkErrors.newValue)) {
+          setDevNetworkErrors(changes.networkErrors.newValue);
         }
       }
     };
@@ -454,8 +627,21 @@ export function SidePanelApp() {
               Natural Language Mission
             </label>
 
-            {/* Mode Selector Tabs */}
-            <div className="flex items-center gap-1 bg-[#060a12] p-1 rounded-xl border border-slate-800">
+            {/* Mode & Cursor Speed Controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = cursorSpeed === 'natural' ? 'demo' : cursorSpeed === 'demo' ? 'fast' : 'natural';
+                  setCursorSpeed(next);
+                  chrome.storage.local.set({ cursorSpeed: next });
+                }}
+                className="px-2 py-1 rounded-lg bg-[#060a12] border border-slate-800 text-[9px] font-bold uppercase text-cyan-300 hover:border-cyan-500/50 transition"
+                title="Cycle Human Cursor Speed (Natural / Demo Slow / Fast)"
+              >
+                Cursor: {cursorSpeed}
+              </button>
+              <div className="flex items-center gap-1 bg-[#060a12] p-1 rounded-xl border border-slate-800">
               {(['manual', 'assisted', 'auto'] as const).map((m) => (
                 <button
                   key={m}
@@ -469,6 +655,7 @@ export function SidePanelApp() {
                   {m}
                 </button>
               ))}
+              </div>
             </div>
           </div>
 
@@ -486,26 +673,124 @@ export function SidePanelApp() {
               rows={3}
               className="w-full bg-[#060a12]/90 border border-slate-700/80 rounded-xl p-3 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 resize-none transition-all leading-relaxed"
             />
-            <div className="flex justify-between items-center px-1 mt-1 text-[10px] text-slate-500">
+            <div className="flex justify-between items-center px-1 mt-1.5 text-[10px] text-slate-500">
               <span className="flex items-center gap-1">
                 <Command className="w-3 h-3 text-slate-500" /> Press <kbd className="font-mono bg-slate-800 px-1 py-0.5 rounded text-slate-400">Ctrl+Enter</kbd> to launch
               </span>
-              <span>{taskPrompt.length} chars</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setVoiceLang(voiceLang === 'en-IN' ? 'hi-IN' : 'en-IN')}
+                  className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/80 text-[9px] font-bold text-slate-300 hover:text-cyan-300 transition"
+                  title="Switch Voice Recognition Language (English / Hindi)"
+                >
+                  {voiceLang === 'en-IN' ? 'EN' : 'HI'}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold transition ${
+                    isListening
+                      ? 'bg-rose-950/80 border-rose-500/60 text-rose-300 animate-pulse'
+                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/40'
+                  }`}
+                  title={isListening ? 'Stop Voice Input' : 'Speak Mission (Hindi / English)'}
+                >
+                  {isListening ? <MicOff className="w-3 h-3 text-rose-400" /> : <Mic className="w-3 h-3 text-cyan-400" />}
+                  <span>{isListening ? 'Listening...' : 'Voice'}</span>
+                </button>
+                <span>{taskPrompt.length} chars</span>
+              </div>
             </div>
           </div>
 
-          {/* Quick Prompt Chips (Zero Emojis, pure vector icons) */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {QUICK_PROMPTS.map((item, idx) => (
+          {/* Quick Prompt Chips + Custom Saved Macros (Zero Emojis, pure vector icons) */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_PROMPTS.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setTaskPrompt(item.prompt)}
+                  className="chip-tactile text-[10px] text-slate-300 hover:text-cyan-300 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/40 px-2.5 py-1.5 rounded-lg transition-all text-left truncate max-w-full flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              ))}
+              {customMacros.map((macro) => (
+                <div
+                  key={macro.id}
+                  className="chip-tactile text-[10px] text-emerald-200 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/40 px-2 py-1 rounded-lg transition-all flex items-center gap-1.5 max-w-full"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTaskPrompt(macro.prompt)}
+                    className="flex items-center gap-1 truncate text-left"
+                    title={macro.prompt}
+                  >
+                    <Bookmark className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span className="truncate">{macro.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMacro(macro.id)}
+                    className="text-slate-400 hover:text-rose-400 shrink-0"
+                    title="Delete Macro"
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ))}
               <button
-                key={idx}
-                onClick={() => setTaskPrompt(item.prompt)}
-                className="chip-tactile text-[10px] text-slate-300 hover:text-cyan-300 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-cyan-500/40 px-2.5 py-1.5 rounded-lg transition-all text-left truncate max-w-full flex items-center gap-1.5"
+                type="button"
+                onClick={() => {
+                  if (!showMacroForm && taskPrompt.trim()) {
+                    setMacroPrompt(taskPrompt.trim());
+                  }
+                  setShowMacroForm(!showMacroForm);
+                }}
+                className="chip-tactile text-[10px] text-cyan-300 bg-cyan-950/40 hover:bg-cyan-950/70 border border-cyan-500/40 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1"
               >
-                <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                <Plus className="w-3 h-3" />
+                <span>Add Macro</span>
               </button>
-            ))}
+            </div>
+
+            {showMacroForm && (
+              <div className="p-2.5 rounded-xl bg-[#060a12]/90 border border-cyan-500/30 space-y-2">
+                <input
+                  type="text"
+                  value={macroLabel}
+                  onChange={(e) => setMacroLabel(e.target.value)}
+                  placeholder="Macro label (e.g., Check GitHub PRs)"
+                  className="w-full bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                />
+                <textarea
+                  value={macroPrompt}
+                  onChange={(e) => setMacroPrompt(e.target.value)}
+                  placeholder="Macro instruction prompt..."
+                  rows={2}
+                  className="w-full bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowMacroForm(false)}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMacro}
+                    disabled={!macroLabel.trim() || !macroPrompt.trim()}
+                    className="px-3 py-1 rounded-lg text-[10px] font-bold bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40"
+                  >
+                    Save Macro
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Execution Controls */}
@@ -528,6 +813,13 @@ export function SidePanelApp() {
             </button>
           </div>
 
+          {humanTakeoverActive && (
+            <div className="p-2.5 rounded-xl text-[11px] font-medium border bg-amber-950/50 border-amber-500/40 text-amber-300 flex items-center gap-2">
+              <Hand className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Human activity detected — AI politely yielding</span>
+            </div>
+          )}
+
           {dispatchBanner && (
             <div
               className={`p-2.5 rounded-xl text-[11px] font-medium border flex items-center justify-between gap-2 animate-in fade-in duration-200 ${
@@ -539,9 +831,28 @@ export function SidePanelApp() {
               }`}
             >
               <span className="truncate">{dispatchBanner.text}</span>
-              <button onClick={() => setDispatchBanner(null)} className="text-slate-400 hover:text-white shrink-0">
-                <X className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {micPermissionNeeded && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      chrome.tabs.create({ url: chrome.runtime.getURL('src/options/options.html?mic=1') });
+                    }}
+                    className="px-2 py-0.5 rounded bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold"
+                  >
+                    Enable Mic
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setDispatchBanner(null);
+                    setMicPermissionNeeded(false);
+                  }}
+                  className="text-slate-400 hover:text-white shrink-0"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -814,6 +1125,112 @@ export function SidePanelApp() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Live Console & Network Error Drawer */}
+        <div className="bg-[#0b101e] border border-slate-800/90 rounded-2xl p-4 shadow-xl space-y-2.5">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showDevDrawer;
+                setShowDevDrawer(next);
+                if (next) refreshDevTelemetry();
+              }}
+              className="flex items-center gap-2 text-left"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Console & Network Errors
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-rose-950/70 border border-rose-500/40 text-[10px] font-bold text-rose-300">
+                {devConsoleLogs.filter((l) => l.level === 'error').length + devNetworkErrors.length}
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={refreshDevTelemetry}
+                className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                title="Attach & Refresh Page Telemetry"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Sync</span>
+              </button>
+              <button
+                type="button"
+                onClick={clearDevTelemetry}
+                className="text-[10px] font-semibold text-slate-500 hover:text-slate-300"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {showDevDrawer && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-1 bg-[#060a12] p-1 rounded-xl border border-slate-800 text-[10px] font-bold">
+                {(['all', 'console', 'network'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setDevFilter(tab)}
+                    className={`flex-1 py-1 rounded-lg uppercase transition ${
+                      devFilter === tab
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 font-mono text-[10px]">
+                {devFilter !== 'network' &&
+                  devConsoleLogs
+                    .filter((l) => l.level === 'error' || l.level === 'warn')
+                    .slice(-20)
+                    .reverse()
+                    .map((item, idx) => (
+                      <div
+                        key={`c-${idx}`}
+                        className="p-2 rounded-lg bg-[#060a12]/90 border border-rose-500/30 text-rose-200 flex items-start gap-2"
+                      >
+                        <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1 break-all">
+                          <span className="uppercase font-bold text-[9px] text-rose-400 mr-1.5">[{item.level}]</span>
+                          <span>{item.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                {devFilter !== 'console' &&
+                  devNetworkErrors
+                    .slice(-20)
+                    .reverse()
+                    .map((item, idx) => (
+                      <div
+                        key={`n-${idx}`}
+                        className="p-2 rounded-lg bg-[#060a12]/90 border border-amber-500/30 text-amber-200 flex items-start gap-2"
+                      >
+                        <WifiOff className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0 flex-1 break-all">
+                          <span className="font-bold text-amber-400 mr-1.5">
+                            {item.method} {item.status || 'ERR'}
+                          </span>
+                          <span className="text-slate-300">{item.url}</span>
+                        </div>
+                      </div>
+                    ))}
+                {devConsoleLogs.filter((l) => l.level === 'error' || l.level === 'warn').length === 0 &&
+                  devNetworkErrors.length === 0 && (
+                    <div className="py-4 text-center text-slate-500 italic font-sans text-xs">
+                      No console or network errors captured yet. Click Sync on an active webpage.
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Live MCP & Agent Telemetry Stream */}

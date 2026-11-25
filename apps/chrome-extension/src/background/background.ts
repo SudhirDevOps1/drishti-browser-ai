@@ -338,7 +338,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
   // Automatically bind target/locked tab if tabId is omitted
   if (!payload.tabId && [
     'NAVIGATE', 'RELOAD', 'GO_BACK', 'GO_FORWARD', 'EXECUTE_SCRIPT',
-    'GET_DOM_SNAPSHOT', 'CLICK', 'TYPE', 'SCROLL', 'PRESS_KEY',
+    'GET_DOM_SNAPSHOT', 'CLICK', 'HOVER', 'TYPE', 'SCROLL', 'PRESS_KEY',
     'GET_PAGE_INFO', 'GET_CONSOLE_LOGS', 'SCREENSHOT'
   ].includes(action)) {
     payload.tabId = await resolveDefaultTabId();
@@ -353,7 +353,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
         throw err;
       });
     }
-  } else if (['NAVIGATE', 'NEW_TAB', 'CLICK', 'TYPE', 'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT', 'SCREENSHOT', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS'].includes(action)) {
+  } else if (['NAVIGATE', 'NEW_TAB', 'CLICK', 'HOVER', 'TYPE', 'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT', 'SCREENSHOT', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS'].includes(action)) {
     let urlToCheck = payload.url as string | undefined;
     if (!urlToCheck && payload.tabId) {
       try {
@@ -390,6 +390,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'EXECUTE_SCRIPT':    result = await executeScript(payload); break;
       case 'GET_DOM_SNAPSHOT':  result = await getDomSnapshot(payload); break;
       case 'CLICK':             result = await clickElement(payload); break;
+      case 'HOVER':             result = await hoverElement(payload); break;
       case 'TYPE':              result = await typeText(payload); break;
       case 'SCROLL':            result = await scrollPage(payload); break;
       case 'PRESS_KEY':         result = await pressKey(payload); break;
@@ -540,6 +541,49 @@ async function navigate(payload: Record<string, unknown>): Promise<unknown> {
 
   if (payload.waitForLoad) {
     await waitForTabLoad(tabId);
+  }
+
+  const resolvedTab = tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (resolvedTab) {
+    chrome.scripting
+      .executeScript({
+        target: { tabId: resolvedTab },
+        func: (targetUrl: string) => {
+          try {
+            let hud = document.querySelector('[data-drishti-hud="true"]') as HTMLElement | null;
+            if (!hud) {
+              hud = document.createElement('div');
+              hud.setAttribute('data-drishti-hud', 'true');
+              hud.style.position = 'fixed';
+              hud.style.top = '14px';
+              hud.style.right = '14px';
+              hud.style.zIndex = '2147483647';
+              hud.style.pointerEvents = 'none';
+              hud.style.padding = '6px 12px';
+              hud.style.borderRadius = '9999px';
+              hud.style.background = 'rgba(6, 10, 18, 0.9)';
+              hud.style.border = '1.5px solid #00f2fe';
+              hud.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.45)';
+              hud.style.color = '#e0faff';
+              hud.style.fontFamily = 'ui-monospace, monospace';
+              hud.style.fontSize = '11px';
+              hud.style.fontWeight = '700';
+              hud.style.transition = 'opacity 250ms ease';
+              document.body.appendChild(hud);
+            }
+            hud.textContent = `DRISHTI AI • NAVIGATE ${targetUrl.slice(0, 42)}`;
+            hud.style.opacity = '1';
+            setTimeout(() => {
+              if (hud) {
+                hud.style.opacity = '0';
+                setTimeout(() => hud?.remove(), 260);
+              }
+            }, 1600);
+          } catch {}
+        },
+        args: [url],
+      })
+      .catch(() => {});
   }
 
   return { success: true, url };
@@ -761,6 +805,13 @@ function extractDomSnapshot() {
   );
 
   interactive.forEach((el, i) => {
+    if (
+      el.closest(
+        'ytd-ad-slot-renderer, ytd-promoted-sparkles-web-renderer, ytd-display-ad-renderer, [data-ad], [aria-label*="Sponsored"]'
+      )
+    ) {
+      return;
+    }
     const rect = el.getBoundingClientRect();
     const isVisible =
       rect.width > 0 &&
@@ -813,6 +864,116 @@ function extractDomSnapshot() {
   };
 }
 
+async function getCursorSpeedMs(): Promise<number> {
+  const { cursorSpeed } = await chrome.storage.local.get('cursorSpeed');
+  if (cursorSpeed === 'fast') return 180;
+  if (cursorSpeed === 'demo') return 850;
+  return 460;
+}
+
+async function dispatchShadowCursor(
+  tabId: number,
+  mode: 'move' | 'hover' | 'click' | 'type' | 'scroll',
+  x: number,
+  y: number,
+  label: string,
+  rect?: { left: number; top: number; width: number; height: number }
+): Promise<void> {
+  const durationMs = await getCursorSpeedMs();
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'DRISHTI_CURSOR_ACTION',
+      payload: { mode, x, y, rect, durationMs, label },
+    });
+  } catch {
+    // Content script may not be ready on special pages
+  }
+}
+
+async function trustedCdpClick(tabId: number, x: number, y: number): Promise<boolean> {
+  const { trustedCdpMode } = await chrome.storage.local.get('trustedCdpMode');
+  if (!trustedCdpMode) return false;
+  const hasPerm = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
+  if (!hasPerm) return false;
+
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x,
+      y,
+    });
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+    await new Promise((r) => setTimeout(r, 45));
+    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await chrome.debugger.detach({ tabId }).catch(() => {});
+  }
+}
+
+async function hoverElement(payload: Record<string, unknown>): Promise<unknown> {
+  const tabId = payload.tabId as number | undefined;
+  const target =
+    tabId ||
+    (await resolveDefaultTabId()) ||
+    (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (!target) throw new Error('No active tab');
+
+  await yieldIfHumanActive();
+
+  const locateRes = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string) => {
+      let el = document.querySelector(selector) as HTMLElement | null;
+      if (!el) {
+        const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
+        const candidates = Array.from(
+          document.querySelectorAll('a, button, input, [role="button"], [role="link"], [role="menuitem"]')
+        ) as HTMLElement[];
+        el =
+          candidates.find((c) => {
+            const t = (c.textContent || '').trim().toLowerCase();
+            const a = (c.getAttribute('aria-label') || '').trim().toLowerCase();
+            return (clean && t.includes(clean)) || (clean && a.includes(clean));
+          }) || null;
+      }
+      if (!el) throw new Error(`Element not found for hover: ${selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      const rect = el.getBoundingClientRect();
+      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      };
+    },
+    args: [String(payload.selector || '')],
+  });
+
+  const coords = locateRes[0]?.result;
+  if (coords) {
+    await dispatchShadowCursor(target, 'hover', coords.x, coords.y, 'HOVERING', coords.rect);
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return { hovered: payload.selector, ...coords };
+}
+
 async function clickElement(payload: Record<string, unknown>): Promise<unknown> {
   const tabId = payload.tabId as number | undefined;
   const target =
@@ -828,46 +989,91 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
   } catch {}
   const learnedSel = await lookupLearnedSelector(hostname, (payload.selector as string) || null);
 
+  await yieldIfHumanActive();
+
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (
+    func: async (
       selector: string | null,
       x: number | null,
       y: number | null,
       learnedSelector: string | null
     ) => {
-      function flashHighlight(element: HTMLElement, label: string = '⚡ AI CLICK') {
+      function glideCursorToRect(rect: DOMRect, badgeText: string = 'DRISHTI AI') {
+        try {
+          const w = window as unknown as { __drishtiCursorPos?: { x: number; y: number } };
+          const prev = w.__drishtiCursorPos || {
+            x: Math.round(window.innerWidth / 2),
+            y: Math.round(window.innerHeight / 2),
+          };
+          const targetX = Math.round(rect.left + rect.width / 2);
+          const targetY = Math.round(rect.top + rect.height / 2);
+          w.__drishtiCursorPos = { x: targetX, y: targetY };
+
+          let cursor = document.querySelector('[data-drishti-cursor="true"]') as HTMLElement | null;
+          if (!cursor) {
+            cursor = document.createElement('div');
+            cursor.setAttribute('data-drishti-cursor', 'true');
+            cursor.style.position = 'fixed';
+            cursor.style.pointerEvents = 'none';
+            cursor.style.zIndex = '2147483647';
+            cursor.style.transition =
+              'left 340ms cubic-bezier(0.22, 1, 0.36, 1), top 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 250ms ease';
+            cursor.innerHTML =
+              '<svg width="24" height="24" viewBox="0 0 24 24" style="filter:drop-shadow(0 0 8px #00f2fe)"><path d="M4 2L20 11L12.5 13.2L10 21L4 2Z" fill="#00f2fe" stroke="#060a12" stroke-width="1.6"/></svg>' +
+              `<span style="position:absolute;left:20px;top:16px;background:linear-gradient(90deg,#00f2fe,#4facfe);color:#060a12;font:900 10px/1 ui-monospace,monospace;padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,242,254,0.5)">${badgeText}</span>`;
+            document.body.appendChild(cursor);
+          }
+
+          cursor.style.left = `${prev.x}px`;
+          cursor.style.top = `${prev.y}px`;
+          cursor.style.opacity = '1';
+          void cursor.offsetWidth;
+          cursor.style.left = `${targetX}px`;
+          cursor.style.top = `${targetY}px`;
+
+          setTimeout(() => {
+            if (cursor) {
+              cursor.style.opacity = '0';
+              setTimeout(() => cursor?.remove(), 260);
+            }
+          }, 1400);
+        } catch {}
+      }
+
+      function flashHighlight(element: HTMLElement, label: string = 'AI CLICK') {
         try {
           element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
           const rect = element.getBoundingClientRect();
+          glideCursorToRect(rect, label);
           const hl = document.createElement('div');
           hl.setAttribute('data-drishti-highlight', 'true');
           hl.style.position = 'fixed';
-          hl.style.top = `${Math.max(0, rect.top - 4)}px`;
-          hl.style.left = `${Math.max(0, rect.left - 4)}px`;
-          hl.style.width = `${Math.max(rect.width + 8, 16)}px`;
-          hl.style.height = `${Math.max(rect.height + 8, 16)}px`;
-          hl.style.border = '2px solid #00f2fe';
-          hl.style.borderRadius = '6px';
-          hl.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.85), inset 0 0 10px rgba(0, 242, 254, 0.25)';
+          hl.style.top = `${Math.max(0, rect.top - 5)}px`;
+          hl.style.left = `${Math.max(0, rect.left - 5)}px`;
+          hl.style.width = `${Math.max(rect.width + 10, 20)}px`;
+          hl.style.height = `${Math.max(rect.height + 10, 20)}px`;
+          hl.style.border = '3px solid #00f2fe';
+          hl.style.borderRadius = '8px';
+          hl.style.boxShadow = '0 0 28px rgba(0, 242, 254, 0.95), inset 0 0 14px rgba(0, 242, 254, 0.35)';
           hl.style.pointerEvents = 'none';
           hl.style.zIndex = '2147483647';
-          hl.style.transition = 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+          hl.style.transition = 'opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
           hl.style.opacity = '1';
-          hl.style.transform = 'scale(1.02)';
+          hl.style.transform = 'scale(1.03)';
 
           const badge = document.createElement('span');
           badge.textContent = label;
           badge.style.position = 'absolute';
-          badge.style.top = '-20px';
+          badge.style.top = '-22px';
           badge.style.left = '0';
           badge.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
           badge.style.color = '#000';
-          badge.style.fontSize = '9px';
+          badge.style.fontSize = '10px';
           badge.style.fontWeight = '900';
-          badge.style.padding = '1px 5px';
-          badge.style.borderRadius = '3px';
-          badge.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
+          badge.style.padding = '2px 6px';
+          badge.style.borderRadius = '4px';
+          badge.style.boxShadow = '0 2px 10px rgba(0,0,0,0.6)';
           badge.style.letterSpacing = '0.5px';
           badge.style.fontFamily = 'monospace, sans-serif';
           hl.appendChild(badge);
@@ -876,9 +1082,38 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
           setTimeout(() => {
             hl.style.opacity = '0';
             hl.style.transform = 'scale(1)';
-            setTimeout(() => hl.remove(), 800);
-          }, 800);
+            setTimeout(() => hl.remove(), 900);
+          }, 1400);
         } catch {}
+      }
+
+      async function humanClick(element: HTMLElement, label: string = 'AI CLICK') {
+        flashHighlight(element, label);
+        await new Promise((r) => setTimeout(r, 360));
+        try {
+          const rect = element.getBoundingClientRect();
+          const ripple = document.createElement('div');
+          ripple.style.position = 'fixed';
+          ripple.style.left = `${Math.round(rect.left + rect.width / 2 - 14)}px`;
+          ripple.style.top = `${Math.round(rect.top + rect.height / 2 - 14)}px`;
+          ripple.style.width = '28px';
+          ripple.style.height = '28px';
+          ripple.style.borderRadius = '9999px';
+          ripple.style.border = '3px solid #00f2fe';
+          ripple.style.boxShadow = '0 0 18px #00f2fe';
+          ripple.style.pointerEvents = 'none';
+          ripple.style.zIndex = '2147483647';
+          ripple.style.transform = 'scale(0.5)';
+          ripple.style.opacity = '1';
+          ripple.style.transition = 'transform 260ms ease-out, opacity 260ms ease-out';
+          document.body.appendChild(ripple);
+          void ripple.offsetWidth;
+          ripple.style.transform = 'scale(1.9)';
+          ripple.style.opacity = '0';
+          setTimeout(() => ripple.remove(), 280);
+        } catch {}
+        await new Promise((r) => setTimeout(r, 140));
+        element.click();
       }
 
       if (selector) {
@@ -886,8 +1121,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
         if (!el && learnedSelector) {
           el = document.querySelector(learnedSelector) as HTMLElement;
           if (el) {
-            flashHighlight(el, '🧠 AI LEARNED');
-            el.click();
+            await humanClick(el, 'AI LEARNED');
             return { clicked: selector, usedLearnedSelector: learnedSelector };
           }
         }
@@ -912,8 +1146,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
             }
           }
           if (el) {
-            flashHighlight(el, '⚡ AI CLICK');
-            el.click();
+            await humanClick(el, 'AI CLICK');
             const aria = el.getAttribute('aria-label');
             const resolvedSelector = el.id
               ? `#${el.id}`
@@ -924,14 +1157,12 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
           }
           throw new Error(`Element not found: ${selector}`);
         }
-        flashHighlight(el, '⚡ AI CLICK');
-        el.click();
+        await humanClick(el, 'AI CLICK');
         return { clicked: selector };
       } else if (x !== null && y !== null) {
         const el = document.elementFromPoint(x, y) as HTMLElement;
         if (el) {
-          flashHighlight(el, '⚡ AI CLICK');
-          el.click();
+          await humanClick(el, 'AI CLICK');
           return { clicked: `element at (${x},${y})` };
         }
         throw new Error(`No element at (${x},${y})`);
@@ -950,6 +1181,37 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
   if (res?.selfHealed && res?.resolvedSelector && hostname && payload.selector) {
     await recordLearnedSelector(hostname, String(payload.selector), String(res.resolvedSelector));
   }
+  // Mirror click onto persistent Shadow DOM Bezier cursor + optional Trusted CDP click
+  if (payload.selector || (payload.x !== undefined && payload.y !== undefined)) {
+    const rectInfo = await chrome.scripting
+      .executeScript({
+        target: { tabId: target },
+        func: (sel: string | null, px: number | null, py: number | null) => {
+          if (sel) {
+            const el = document.querySelector(sel) as HTMLElement | null;
+            if (el) {
+              const r = el.getBoundingClientRect();
+              return {
+                x: Math.round(r.left + r.width / 2),
+                y: Math.round(r.top + r.height / 2),
+                rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+              };
+            }
+          }
+          if (px !== null && py !== null) {
+            return { x: px, y: py };
+          }
+          return null;
+        },
+        args: [(payload.selector as string) || null, (payload.x as number) ?? null, (payload.y as number) ?? null],
+      })
+      .then((r) => r[0]?.result)
+      .catch(() => null);
+    if (rectInfo) {
+      await dispatchShadowCursor(target, 'click', rectInfo.x, rectInfo.y, 'AI CLICK', rectInfo.rect);
+      await trustedCdpClick(target, rectInfo.x, rectInfo.y);
+    }
+  }
   return res;
 }
 
@@ -961,13 +1223,63 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
 
+  await yieldIfHumanActive();
+
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (selector: string | null, text: string, clearFirst: boolean) => {
-      function flashHighlight(element: HTMLElement, label: string = '⚡ AI CLICK') {
+    func: async (selector: string | null, text: string, clearFirst: boolean) => {
+      function glideCursorToRect(rect: DOMRect) {
+        try {
+          const w = window as unknown as { __drishtiCursorPos?: { x: number; y: number } };
+          const prev = w.__drishtiCursorPos || {
+            x: Math.round(window.innerWidth / 2),
+            y: Math.round(window.innerHeight / 2),
+          };
+          const targetX = Math.round(rect.left + rect.width / 2);
+          const targetY = Math.round(rect.top + rect.height / 2);
+          w.__drishtiCursorPos = { x: targetX, y: targetY };
+
+          let cursor = document.querySelector('[data-drishti-cursor="true"]') as HTMLElement | null;
+          if (!cursor) {
+            cursor = document.createElement('div');
+            cursor.setAttribute('data-drishti-cursor', 'true');
+            cursor.style.position = 'fixed';
+            cursor.style.width = '18px';
+            cursor.style.height = '18px';
+            cursor.style.marginLeft = '-9px';
+            cursor.style.marginTop = '-9px';
+            cursor.style.borderRadius = '9999px';
+            cursor.style.border = '2px solid #00f2fe';
+            cursor.style.background = 'rgba(0, 242, 254, 0.22)';
+            cursor.style.boxShadow = '0 0 14px rgba(0, 242, 254, 0.85)';
+            cursor.style.pointerEvents = 'none';
+            cursor.style.zIndex = '2147483647';
+            cursor.style.transition =
+              'left 260ms cubic-bezier(0.22, 1, 0.36, 1), top 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease';
+            document.body.appendChild(cursor);
+          }
+
+          cursor.style.left = `${prev.x}px`;
+          cursor.style.top = `${prev.y}px`;
+          cursor.style.opacity = '1';
+          void cursor.offsetWidth;
+          cursor.style.left = `${targetX}px`;
+          cursor.style.top = `${targetY}px`;
+
+          setTimeout(() => {
+            if (cursor) {
+              cursor.style.opacity = '0';
+              setTimeout(() => cursor?.remove(), 240);
+            }
+          }, 900);
+        } catch {}
+      }
+
+      function flashHighlight(element: HTMLElement, label: string = 'AI TYPE') {
         try {
           element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
           const rect = element.getBoundingClientRect();
+          glideCursorToRect(rect);
           const hl = document.createElement('div');
           hl.setAttribute('data-drishti-highlight', 'true');
           hl.style.position = 'fixed';
@@ -1041,7 +1353,8 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
         throw new Error('Cannot type into password fields via automation');
       }
 
-      flashHighlight(el, '⌨️ AI TYPE');
+      flashHighlight(el, 'AI TYPE');
+      await new Promise((r) => setTimeout(r, 320));
       el.focus();
 
       // Handle contenteditable / Slate / ProseMirror / TipTap rich-text editors
@@ -1082,6 +1395,7 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
         }
         el.dispatchEvent(new InputEvent('input', { data: char, bubbles: true, inputType: 'insertText' }));
         el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+        await new Promise((r) => setTimeout(r, 28 + Math.floor(Math.random() * 24)));
       }
 
       el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1116,6 +1430,37 @@ async function scrollPage(payload: Record<string, unknown>): Promise<unknown> {
       };
       const [x, y] = scrollMap[direction] || [0, amount];
       window.scrollBy({ left: x, top: y, behavior: 'smooth' });
+      try {
+        let hud = document.querySelector('[data-drishti-hud="true"]') as HTMLElement | null;
+        if (!hud) {
+          hud = document.createElement('div');
+          hud.setAttribute('data-drishti-hud', 'true');
+          hud.style.position = 'fixed';
+          hud.style.top = '14px';
+          hud.style.right = '14px';
+          hud.style.zIndex = '2147483647';
+          hud.style.pointerEvents = 'none';
+          hud.style.padding = '6px 12px';
+          hud.style.borderRadius = '9999px';
+          hud.style.background = 'rgba(6, 10, 18, 0.9)';
+          hud.style.border = '1.5px solid #00f2fe';
+          hud.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.45)';
+          hud.style.color = '#e0faff';
+          hud.style.fontFamily = 'ui-monospace, monospace';
+          hud.style.fontSize = '11px';
+          hud.style.fontWeight = '700';
+          hud.style.transition = 'opacity 250ms ease';
+          document.body.appendChild(hud);
+        }
+        hud.textContent = `DRISHTI AI • SCROLL ${direction.toUpperCase()} ${amount}px`;
+        hud.style.opacity = '1';
+        setTimeout(() => {
+          if (hud) {
+            hud.style.opacity = '0';
+            setTimeout(() => hud?.remove(), 260);
+          }
+        }, 1200);
+      } catch {}
       return { scrolled: direction, amount };
     },
     args: [
@@ -1214,10 +1559,149 @@ async function getPageInfo(payload: Record<string, unknown>): Promise<unknown> {
   return results[0]?.result;
 }
 
+let lastHumanActivityAt = 0;
+
+async function yieldIfHumanActive(): Promise<void> {
+  const since = Date.now() - lastHumanActivityAt;
+  if (lastHumanActivityAt > 0 && since < 3000) {
+    broadcastAction('Human takeover detected — AI yielding briefly', 'TAKEOVER', 'pending');
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
+async function attachDevTelemetry(tabId?: number): Promise<{ attached: boolean; tabId?: number }> {
+  const target =
+    tabId ||
+    (await resolveDefaultTabId()) ||
+    (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (!target) return { attached: false };
+
+  const tab = await chrome.tabs.get(target).catch(() => null);
+  if (!tab?.url || !(await checkDomainPolicy(tab.url))) {
+    return { attached: false, tabId: target };
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId: target },
+    world: 'MAIN',
+    func: () => {
+      const w = window as unknown as { __drishtiTelemetryHooked?: boolean };
+      if (w.__drishtiTelemetryHooked) return;
+      w.__drishtiTelemetryHooked = true;
+
+      const emit = (payload: Record<string, unknown>) => {
+        try {
+          window.postMessage({ source: 'DRISHTI_DEV_TELEMETRY', payload }, '*');
+        } catch {}
+      };
+
+      const origErr = console.error.bind(console);
+      console.error = (...args: unknown[]) => {
+        origErr(...args);
+        emit({
+          kind: 'console',
+          level: 'error',
+          message: args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '),
+          url: window.location.href,
+          timestamp: Date.now(),
+        });
+      };
+
+      window.addEventListener('error', (ev) => {
+        emit({
+          kind: 'console',
+          level: 'error',
+          message: ev.message || 'Uncaught window error',
+          url: ev.filename || window.location.href,
+          timestamp: Date.now(),
+        });
+      });
+
+      window.addEventListener('unhandledrejection', (ev) => {
+        emit({
+          kind: 'console',
+          level: 'error',
+          message: `UnhandledRejection: ${String(ev.reason)}`,
+          url: window.location.href,
+          timestamp: Date.now(),
+        });
+      });
+
+      const origFetch = window.fetch.bind(window);
+      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method || (input instanceof Request ? input.method : 'GET');
+        const reqUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        try {
+          const res = await origFetch(input, init);
+          if (res.status >= 400) {
+            emit({
+              kind: 'network',
+              method,
+              url: reqUrl,
+              status: res.status,
+              message: `HTTP ${res.status} ${res.statusText || ''}`.trim(),
+              timestamp: Date.now(),
+            });
+          }
+          return res;
+        } catch (err) {
+          emit({
+            kind: 'network',
+            method,
+            url: reqUrl,
+            status: 0,
+            message: err instanceof Error ? err.message : String(err),
+            timestamp: Date.now(),
+          });
+          throw err;
+        }
+      };
+
+      const OrigXHR = window.XMLHttpRequest;
+      const origOpen = OrigXHR.prototype.open;
+      const origSend = OrigXHR.prototype.send;
+      OrigXHR.prototype.open = function (method: string, url: string | URL, ...rest: unknown[]) {
+        (this as unknown as { __drishtiMeta?: { method: string; url: string } }).__drishtiMeta = {
+          method,
+          url: String(url),
+        };
+        return (origOpen as (...a: unknown[]) => unknown).apply(this, [method, url, ...rest]);
+      };
+      OrigXHR.prototype.send = function (...args: unknown[]) {
+        this.addEventListener('loadend', () => {
+          const meta = (this as unknown as { __drishtiMeta?: { method: string; url: string } }).__drishtiMeta;
+          if (this.status >= 400 || this.status === 0) {
+            emit({
+              kind: 'network',
+              method: meta?.method || 'XHR',
+              url: meta?.url || window.location.href,
+              status: this.status,
+              message: this.status === 0 ? 'XHR network failure' : `HTTP ${this.status} ${this.statusText || ''}`.trim(),
+              timestamp: Date.now(),
+            });
+          }
+        });
+        return (origSend as (...a: unknown[]) => unknown).apply(this, args);
+      };
+    },
+  });
+
+  return { attached: true, tabId: target };
+}
+
 async function getConsoleLogs(_payload: Record<string, unknown>): Promise<unknown> {
   // Console logs are captured by content script and stored in extension storage
   const result = await chrome.storage.session.get(['consoleLogs']);
   return result.consoleLogs || [];
+}
+
+async function getDevTelemetry(tabId?: number): Promise<{ consoleLogs: unknown[]; networkErrors: unknown[] }> {
+  await attachDevTelemetry(tabId).catch(() => {});
+  const result = await chrome.storage.session.get(['consoleLogs', 'networkErrors']);
+  return {
+    consoleLogs: Array.isArray(result.consoleLogs) ? result.consoleLogs : [],
+    networkErrors: Array.isArray(result.networkErrors) ? result.networkErrors : [],
+  };
 }
 
 async function waitCommand(payload: Record<string, unknown>): Promise<unknown> {
@@ -1356,6 +1840,12 @@ async function executeNaturalTask(prompt: string, _mode: string, tabId?: number)
 // --- Init ---
 connectToBridge();
 
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab?.url) {
+    attachDevTelemetry(tabId).catch(() => {});
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_STATUS') {
     sendResponse({
@@ -1422,6 +1912,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     taskAborted = true;
     chrome.storage.local.set({ automationEnabled: false }).then(() => {
       broadcastAction('Task Halted & AI Automation Paused by User', 'SAFETY', 'error');
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+  if (msg.type === 'HUMAN_ACTIVITY') {
+    lastHumanActivityAt = typeof msg.timestamp === 'number' ? msg.timestamp : Date.now();
+    chrome.storage.session.set({ lastHumanActivityAt }).catch(() => {});
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (msg.type === 'GET_DEV_TELEMETRY') {
+    getDevTelemetry(msg.tabId)
+      .then((data) => sendResponse({ success: true, ...data }))
+      .catch((err) => sendResponse({ success: false, error: String(err) }));
+    return true;
+  }
+  if (msg.type === 'CLEAR_DEV_TELEMETRY') {
+    chrome.storage.session.set({ consoleLogs: [], networkErrors: [] }).then(() => {
       sendResponse({ ok: true });
     });
     return true;

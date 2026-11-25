@@ -177,6 +177,21 @@ Commands:
         break;
       }
 
+      case 'hover': {
+        const selector = args[1];
+        if (!selector) throw new Error('Usage: drishti-exec.mjs hover <selector>');
+        const res = await executeBridgeCommand('HOVER', { selector });
+        console.log(JSON.stringify({ success: true, hovered: selector, result: res }, null, 2));
+        break;
+      }
+
+      case 'press': {
+        const key = args[1] || 'Enter';
+        const res = await executeBridgeCommand('PRESS_KEY', { key });
+        console.log(JSON.stringify({ success: true, pressed: key, result: res }, null, 2));
+        break;
+      }
+
       case 'type': {
         const selector = args[1];
         const text = args.slice(2).join(' ');

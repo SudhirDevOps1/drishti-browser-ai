@@ -22,3 +22,5 @@ jobs:
       - run: pnpm version:verify
       - run: pnpm -r run build
       - run: pnpm test
+      - run: pnpm exec playwright install chromium
+      - run: pnpm test:e2e

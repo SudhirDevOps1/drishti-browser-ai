@@ -26,6 +26,7 @@ import {
   Search,
   FileText,
   Play,
+  Mic,
 } from 'lucide-react';
 import '../styles.css';
 
@@ -58,8 +59,24 @@ export function OptionsApp() {
   const [copiedSelector, setCopiedSelector] = useState<string | null>(null);
   const [testingMission, setTestingMission] = useState<boolean>(false);
   const [missionSteps, setMissionSteps] = useState<string[]>([]);
+  const [micStatus, setMicStatus] = useState<'idle' | 'granted' | 'denied'>('idle');
+  const [showMicPromptCard, setShowMicPromptCard] = useState<boolean>(false);
+
+  const requestMicrophoneAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      setMicStatus('granted');
+      setShowMicPromptCard(false);
+    } catch {
+      setMicStatus('denied');
+    }
+  };
 
   useEffect(() => {
+    if (window.location.search.includes('mic=1')) {
+      setShowMicPromptCard(true);
+    }
     chrome.storage.local.get(
       [
         'bridgeAuthToken',
@@ -284,6 +301,29 @@ When the user gives you any browser task (e.g. "Open Google, search Java DSA tut
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={requestMicrophoneAccess}
+              className={`btn-interactive flex items-center gap-1.5 text-xs font-bold py-2 px-3.5 rounded-xl border transition ${
+                micStatus === 'granted'
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : micStatus === 'denied'
+                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                  : showMicPromptCard
+                  ? 'bg-cyan-600 border-cyan-400 text-white animate-pulse'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-cyan-300'
+              }`}
+              title="Grant microphone permission for Sidepanel Voice Commands"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>
+                {micStatus === 'granted'
+                  ? 'Mic Granted'
+                  : micStatus === 'denied'
+                  ? 'Mic Blocked'
+                  : 'Enable Voice Mic'}
+              </span>
+            </button>
             {hasChanges && (
               <span className="text-[11px] font-bold text-amber-400 animate-pulse flex items-center gap-1.5 bg-amber-950/40 px-2.5 py-1 rounded-full border border-amber-500/30">
                 <AlertTriangle className="w-3 h-3 text-amber-400" />
