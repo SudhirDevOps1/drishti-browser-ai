@@ -236,8 +236,20 @@ const targets = [
     name: 'chrome-manifest',
     file: 'apps/chrome-extension/public/manifest.json',
     render: (v, p, text) => {
-      const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${v}$2`);
-      return next === text ? null : next;
+      const numeric =
+        p.channel === 'stable'
+          ? `${p.major}.${p.minor}.${p.patch}`
+          : `${p.major}.${p.minor}.${p.patch}.${p.n}`;
+      let obj;
+      try {
+        obj = JSON.parse(text);
+      } catch {
+        return null;
+      }
+      if (obj.version === numeric && obj.version_name === v) return null;
+      obj.version = numeric;
+      obj.version_name = v;
+      return JSON.stringify(obj, null, 2) + '\n';
     },
   },
   {

@@ -1,0 +1,79 @@
+name: Pre-Release Channels (Alpha / Beta / RC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Release channel to publish'
+        required: true
+        default: 'alpha'
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+          - prerelease
+          - stable
+
+permissions:
+  contents: write
+
+jobs:
+  publish-prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Bump Version Channel
+        id: ver
+        run: |
+          node scripts/version.mjs bump "${{ inputs.channel }}" --no-changelog
+          NEW_VER=$(node -p "require('./package.json').version")
+          echo "version=${NEW_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${NEW_VER}" >> "$GITHUB_OUTPUT"
+      - run: pnpm -r run build
+      - run: pnpm test
+      - name: Package Extension ZIP & Checksum
+        id: pkg
+        run: |
+          ZIP_NAME="drishti-browser-ai-extension-${{ steps.ver.outputs.tag }}.zip"
+          cd apps/chrome-extension/dist
+          zip -r "../../../${ZIP_NAME}" .
+          cd ../../..
+          SHA=$(sha256sum "${ZIP_NAME}" | awk '{print $1}')
+          echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+      - name: Create Pre-Release Tag & Upload ZIP
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          VER="${{ steps.ver.outputs.version }}"
+          ZIP_NAME="${{ steps.pkg.outputs.zip_name }}"
+          SHA="${{ steps.pkg.outputs.sha256 }}"
+          IS_PRE="--prerelease"
+          if [ "${{ inputs.channel }}" = "stable" ]; then
+            IS_PRE=""
+          fi
+          gh release create "${TAG}" "${ZIP_NAME}" \
+            ${IS_PRE} \
+            --target "${{ github.sha }}" \
+            --title "Drishti Browser AI ${TAG} (${{ inputs.channel }})" \
+            --notes "## 👁️ Drishti Browser AI ${TAG} (${{ inputs.channel }} channel)
+
+          - **Version**: \`${VER}\`
+          - **Channel**: \`${{ inputs.channel }}\`
+          - **SHA-256 (\`${ZIP_NAME}\`)**: \`${SHA}\`
+
+          ### 📦 Quick Install
+          1. Download \`${ZIP_NAME}\` from Assets and unzip it.
+          2. Open \`chrome://extensions/\` → Enable **Developer mode** → **Load unpacked**."
