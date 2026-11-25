@@ -27,9 +27,11 @@ apps/mcp-server/workflows/
 npm-debug.log*
 pnpm-debug.log*
 
-# OS & Editor Files
+# OS, Editor & Local AI Agent Files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 .claude/
+.agents/
+.opencode/
