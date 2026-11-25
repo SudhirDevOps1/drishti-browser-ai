@@ -40,6 +40,12 @@ const BatchCompareSchema = z.object({
   urls: z.array(z.string().url()).min(1).max(3).describe('Up to 3 URLs to open concurrently and compare (e.g. Amazon, Flipkart, Croma).'),
 });
 
+const UpdateMissionSchema = z.object({
+  missionId: z.string().describe('ID of the Sidepanel mission to update.'),
+  status: z.enum(['queued', 'running', 'completed', 'failed']).describe('Updated mission status.'),
+  summary: z.string().optional().describe('Short summary of what was accomplished or error reason.'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const AUTOMATION_TOOLS = [
@@ -124,6 +130,30 @@ export const AUTOMATION_TOOLS = [
       required: ['urls'],
     },
   },
+  {
+    name: 'browser_get_missions',
+    description:
+      'List missions sent by the user from the Drishti Control Deck browser Sidepanel (Natural Language Mission box).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'browser_update_mission',
+    description:
+      'Update the status and summary of a Sidepanel mission so the user sees live progress in the browser.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        missionId: { type: 'string', description: 'Mission ID from browser_get_missions.' },
+        status: { type: 'string', enum: ['queued', 'running', 'completed', 'failed'] },
+        summary: { type: 'string', description: 'Optional result summary.' },
+      },
+      required: ['missionId', 'status'],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -149,6 +179,13 @@ export async function handleAutomationTool(name: string, args: unknown, bridge: 
     case 'browser_batch_compare': {
       const params = BatchCompareSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('BATCH_COMPARE', params));
+    }
+    case 'browser_get_missions': {
+      return ok(await bridge.sendCommand('GET_MISSIONS', {}));
+    }
+    case 'browser_update_mission': {
+      const params = UpdateMissionSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('UPDATE_MISSION', params));
     }
     default:
       return undefined;

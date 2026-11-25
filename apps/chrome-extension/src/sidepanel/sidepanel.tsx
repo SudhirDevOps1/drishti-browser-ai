@@ -282,6 +282,21 @@ export function SidePanelApp() {
       (res) => {
         setIsRunning(false);
         saveMissionToHistory(res && res.success !== false ? 'success' : 'failed');
+        if (res?.dispatchedTo) {
+          setLogs((prev) => [
+            {
+              id: String(Date.now() + Math.random()),
+              action:
+                res.dispatchedTo === 'antigravity'
+                  ? `Dispatched to Antigravity (${res.missionId})`
+                  : `Queued in MCP Agent Inbox (${res.missionId}) — Ready for Claude/OpenCode/Cursor`,
+              category: 'AGENT',
+              timestamp: new Date().toLocaleTimeString(),
+              status: 'success',
+            },
+            ...prev,
+          ]);
+        }
       }
     );
   };
@@ -488,7 +503,7 @@ export function SidePanelApp() {
               className="btn-tactile flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
             >
               <Play className={`w-3.5 h-3.5 ${isRunning ? 'animate-pulse text-cyan-300' : ''}`} />
-              <span>{isRunning ? `Running (${elapsedSeconds}s)...` : 'Execute Mission'}</span>
+              <span>{isRunning ? `Running (${elapsedSeconds}s)...` : connected ? 'Send to AI Agent' : 'Execute Mission'}</span>
             </button>
 
             <button

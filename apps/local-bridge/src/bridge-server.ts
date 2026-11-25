@@ -28,6 +28,20 @@ interface BridgeMessage {
   error?: string;
 }
 
+export interface MissionRecord {
+  id: string;
+  prompt: string;
+  mode: string;
+  tabId?: number;
+  url?: string;
+  title?: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  dispatchedTo: 'antigravity' | 'mcp-queue';
+  conversationId?: string;
+  summary?: string;
+  createdAt: string;
+}
+
 type MessageHandler = (payload: unknown) => Promise<unknown> | unknown;
 
 /**
@@ -57,6 +71,9 @@ export class BridgeServer extends EventEmitter {
 
   /** Registered inbound-action handlers (for MCP → extension routing). */
   private handlers = new Map<string, MessageHandler>();
+
+  /** Mission Inbox queue dispatched from Drishti Control Deck Sidepanel. */
+  private missions: MissionRecord[] = [];
 
   constructor(options: BridgeServerOptions) {
     super();
@@ -216,6 +233,108 @@ export class BridgeServer extends EventEmitter {
       // ── Ping / Pong heartbeat ──
       if (msg.type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        return;
+      }
+
+      // ── Handle Sidepanel Mission Dispatch (Extension → Antigravity / MCP Queue) ──
+      if (!isController && msg.type === 'dispatch_mission' && msg.id) {
+        const p = (msg.payload || {}) as Record<string, any>;
+        const record: MissionRecord = {
+          id: 'mission-' + Date.now().toString(36),
+          prompt: String(p.prompt || ''),
+          mode: String(p.mode || 'auto'),
+          tabId: typeof p.tabId === 'number' ? p.tabId : undefined,
+          url: p.url ? String(p.url) : undefined,
+          title: p.title ? String(p.title) : undefined,
+          status: 'queued',
+          dispatchedTo: 'mcp-queue',
+          createdAt: new Date().toISOString(),
+        };
+
+        const lsAddr = process.env.ANTIGRAVITY_LS_ADDRESS;
+        const csrf = process.env.ANTIGRAVITY_CSRF_TOKEN;
+        if (lsAddr && csrf) {
+          try {
+            const agPrompt = [
+              `[Drishti Control Deck Mission | ID: ${record.id}]`,
+              `User Instruction: ${record.prompt}`,
+              `Mode: ${record.mode}`,
+              record.tabId ? `Target Tab ID: ${record.tabId} (${record.title || ''} - ${record.url || ''})` : '',
+              `Execute this browser task on the user's live Chrome/Brave browser using Drishti (drishti-exec.mjs or MCP tools), and call browser_update_mission({ missionId: "${record.id}", status: "completed", summary: "..." }) when done.`,
+            ].filter(Boolean).join('\n');
+
+            const resp = await fetch(`http://${lsAddr}/product.v1.ConversationService/CreateConversation`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Connect-Protocol-Version': '1',
+                'x-antigravity-csrf-token': csrf,
+              },
+              body: JSON.stringify({
+                title: `Drishti: ${record.prompt.slice(0, 40)}`,
+                tags: ['drishti-mission'],
+                prompt: [{ text: agPrompt }],
+              }),
+            });
+            if (resp.ok) {
+              const data = (await resp.json().catch(() => ({}))) as any;
+              record.dispatchedTo = 'antigravity';
+              record.status = 'running';
+              record.conversationId = data.conversationId || data.id;
+              logger.info(`Mission ${record.id} dispatched to Antigravity (${record.conversationId || 'started'})`);
+            }
+          } catch (err) {
+            logger.warn(`Antigravity dispatch fallback to MCP queue: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        this.missions = [record, ...this.missions].slice(0, 25);
+        logger.info(`Mission ${record.id} [${record.dispatchedTo}]: ${record.prompt.slice(0, 60)}`);
+
+        ws.send(JSON.stringify({
+          type: 'response',
+          id: msg.id,
+          result: {
+            success: true,
+            missionId: record.id,
+            dispatchedTo: record.dispatchedTo,
+            conversationId: record.conversationId,
+            steps: [
+              record.dispatchedTo === 'antigravity'
+                ? `Dispatched directly to Antigravity (${record.conversationId || 'Active'})`
+                : `Queued in Universal MCP Mission Inbox (${record.id})`,
+            ],
+          },
+        }));
+        return;
+      }
+
+      // ── Handle Bridge-level Mission Queue commands from MCP/CLI ──
+      if (isController && msg.id && msg.action === 'GET_MISSIONS') {
+        ws.send(JSON.stringify({
+          id: msg.id,
+          success: true,
+          result: {
+            missions: this.missions,
+            antigravityDirectEnabled: Boolean(process.env.ANTIGRAVITY_LS_ADDRESS && process.env.ANTIGRAVITY_CSRF_TOKEN),
+          },
+        }));
+        return;
+      }
+
+      if (isController && msg.id && msg.action === 'UPDATE_MISSION') {
+        const p = (msg.payload || {}) as Record<string, any>;
+        const target = this.missions.find((m) => m.id === p.missionId);
+        if (!target) {
+          ws.send(JSON.stringify({ id: msg.id, success: false, error: `Mission not found: ${p.missionId}` }));
+          return;
+        }
+        if (p.status) target.status = p.status;
+        if (p.summary) target.summary = String(p.summary);
+        if (this.extensionSocket && this.extensionSocket.readyState === WebSocket.OPEN) {
+          this.extensionSocket.send(JSON.stringify({ type: 'mission_update', mission: target }));
+        }
+        ws.send(JSON.stringify({ id: msg.id, success: true, result: target }));
         return;
       }
 

@@ -12,6 +12,7 @@ let reconnectAttempts = 0;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let authToken = '';
+const pendingBridgeDispatches = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 
 // --- Connection Management ---
 async function getAuthToken(): Promise<string> {
@@ -79,6 +80,24 @@ async function connectToBridge(): Promise<void> {
         }
 
         if (msg.type === 'pong') {
+          return;
+        }
+
+        if (msg.type === 'response' && msg.id && pendingBridgeDispatches.has(msg.id)) {
+          const d = pendingBridgeDispatches.get(msg.id)!;
+          pendingBridgeDispatches.delete(msg.id);
+          if (msg.error) d.reject(new Error(msg.error));
+          else d.resolve(msg.result);
+          return;
+        }
+
+        if (msg.type === 'mission_update' && msg.mission) {
+          const m = msg.mission;
+          broadcastAction(
+            `Agent Mission [${String(m.status).toUpperCase()}]: ${m.summary || m.prompt?.slice(0, 60) || m.id}`,
+            'AGENT',
+            m.status === 'failed' ? 'error' : m.status === 'completed' ? 'success' : 'pending'
+          );
           return;
         }
 
@@ -1217,7 +1236,48 @@ async function executeNaturalTask(prompt: string, _mode: string, tabId?: number)
     targetTabId = active[0]?.id;
   }
 
-  // Step 1: Navigation or observation
+  // If Bridge is connected, dispatch mission directly to Antigravity / Universal MCP Inbox!
+  if (socket && socket.readyState === WebSocket.OPEN && isConnected) {
+    let tabUrl = '';
+    let tabTitle = '';
+    if (targetTabId) {
+      try {
+        const t = await chrome.tabs.get(targetTabId);
+        tabUrl = t?.url || '';
+        tabTitle = t?.title || '';
+      } catch {}
+    }
+
+    const dispatchId = 'disp-' + Date.now().toString(36);
+    const dispatchResult = await new Promise<{ success: boolean; steps: string[]; dispatchedTo?: string; missionId?: string }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingBridgeDispatches.delete(dispatchId);
+        reject(new Error('Bridge mission dispatch timed out'));
+      }, 15000);
+
+      pendingBridgeDispatches.set(dispatchId, {
+        resolve: (val) => { clearTimeout(timer); resolve(val); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+      });
+
+      socket!.send(JSON.stringify({
+        type: 'dispatch_mission',
+        id: dispatchId,
+        payload: { prompt, mode: _mode, tabId: targetTabId, url: tabUrl, title: tabTitle },
+      }));
+    });
+
+    broadcastAction(
+      dispatchResult.dispatchedTo === 'antigravity'
+        ? `Sent to Antigravity (${dispatchResult.missionId})`
+        : `Queued in MCP Agent Inbox (${dispatchResult.missionId})`,
+      'AGENT',
+      'success'
+    );
+    return dispatchResult;
+  }
+
+  // Offline Fallback: Step 1: Navigation or observation
   if (lower.includes('google') || lower.includes('search')) {
     if (taskAborted) throw new Error('Task aborted by user');
     broadcastAction('Navigating to Google Search Engine', 'NAV', 'pending');

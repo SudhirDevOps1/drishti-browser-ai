@@ -149,6 +149,12 @@ Commands:
         break;
       }
 
+      case 'missions': {
+        const res = await executeBridgeCommand('GET_MISSIONS');
+        console.log(JSON.stringify(res, null, 2));
+        break;
+      }
+
       case 'tabs': {
         const tabs = await executeBridgeCommand('GET_TABS');
         console.log(JSON.stringify(tabs, null, 2));
