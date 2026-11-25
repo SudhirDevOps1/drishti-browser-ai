@@ -35,10 +35,15 @@ const docs = docFiles
   })
   .filter(Boolean);
 
+// Read CHANGELOG
+const changelogPath = path.join(repoRoot, 'CHANGELOG.md');
+const changelog = fs.existsSync(changelogPath) ? fs.readFileSync(changelogPath, 'utf8') : '';
+
 const payload = {
   version: rootPkg.version || '0.1.0',
   repoUrl: 'https://github.com/SudhirDevOps1/drishti-browser-ai',
   docs,
+  changelog,
   generatedAt: new Date().toISOString(),
 };
 
