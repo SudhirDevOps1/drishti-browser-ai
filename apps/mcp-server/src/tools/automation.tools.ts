@@ -46,6 +46,12 @@ const UpdateMissionSchema = z.object({
   summary: z.string().optional().describe('Short summary of what was accomplished or error reason.'),
 });
 
+const DownloadMediaSchema = z.object({
+  url: z.string().url().describe('URL of the file or media to download silently (no OS Save As dialog).'),
+  filename: z.string().optional().describe('Optional target filename.'),
+  subfolder: z.string().optional().describe('Optional subfolder inside Downloads (e.g. "drishti-media").'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const AUTOMATION_TOOLS = [
@@ -154,6 +160,20 @@ export const AUTOMATION_TOOLS = [
       required: ['missionId', 'status'],
     },
   },
+  {
+    name: 'browser_download',
+    description:
+      'Silently download a URL via chrome.downloads with saveAs:false into a dedicated subfolder (zero OS Save As dialog).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        url: { type: 'string', description: 'URL to download.' },
+        filename: { type: 'string', description: 'Optional filename.' },
+        subfolder: { type: 'string', description: 'Optional subfolder (default: drishti-downloads).' },
+      },
+      required: ['url'],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -186,6 +206,10 @@ export async function handleAutomationTool(name: string, args: unknown, bridge: 
     case 'browser_update_mission': {
       const params = UpdateMissionSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('UPDATE_MISSION', params));
+    }
+    case 'browser_download': {
+      const params = DownloadMediaSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('DOWNLOAD_MEDIA', params));
     }
     default:
       return undefined;

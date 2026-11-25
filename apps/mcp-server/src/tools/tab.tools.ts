@@ -27,6 +27,10 @@ const GroupTabsSchema = z.object({
   groupName: z.string().optional().describe('Optional label for the tab group.'),
 });
 
+const UseTabSchema = z.object({
+  tabId: z.number().int().nullable().describe('Tab ID to bind automation to, or null to unlock and follow active tab.'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const TAB_TOOLS = [
@@ -88,6 +92,17 @@ export const TAB_TOOLS = [
       required: ['tabIds'],
     },
   },
+  {
+    name: 'browser_use_tab',
+    description: 'Bind automation to a specific tabId, or pass null to unlock and follow whichever tab is active.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        tabId: { type: ['number', 'null'], description: 'Tab ID to lock, or null to unlock.' },
+      },
+      required: ['tabId'],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -121,6 +136,12 @@ export async function handleTabTool(name: string, args: unknown, bridge: BridgeC
     case 'browser_group_tabs': {
       const params = GroupTabsSchema.parse(args ?? {});
       const result = await bridge.sendCommand('GROUP_TABS', params);
+      return ok(result);
+    }
+
+    case 'browser_use_tab': {
+      const params = UseTabSchema.parse(args ?? {});
+      const result = await bridge.sendCommand('USE_TAB', params);
       return ok(result);
     }
 

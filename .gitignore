@@ -15,9 +15,14 @@ apps/web-showcase/src/generated/
 .active-token.txt
 **/.active-token.txt
 
-# Local Scratch, Downloads & Logs
+# Local Scratch, Downloads, SQLite Memory & Logs
 scratch/
 downloads/
+apps/mcp-server/data/
+apps/mcp-server/workflows/
+*.db
+*.db-wal
+*.db-shm
 *.log
 npm-debug.log*
 pnpm-debug.log*

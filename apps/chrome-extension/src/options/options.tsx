@@ -239,22 +239,17 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
   }
 }
 
-## 0. FIRST-TIME TOKEN & SETUP (IF YOUR_AUTH_TOKEN)
-If BRIDGE_AUTH_TOKEN is "YOUR_AUTH_TOKEN":
-1. Generate a secure 64-character hex token via: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-2. Save it to .drishti-token in the repo root, configure MCP with that token, and start the bridge on-demand (never install OS auto-start scripts).
-3. Print the generated token and guide the user step-by-step:
-   - Open chrome://extensions/ -> Developer mode -> Load unpacked -> select apps/chrome-extension/dist
-   - Open Drishti Settings -> Connection & Bridge -> paste token -> Save Changes -> Run Ping.
+## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
+1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\` in known local workspaces). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
+2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client all --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\`
+   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in OpenCode/Antigravity/Claude/Cursor MCP configs, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
+3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
 
-## 3. HOW TO EXECUTE USER TASKS
-When the user gives you any browser task (e.g. "Open Google, search Java DSA tutorials, compare top 3 sites & write a report"):
-1. Call browser_status() to verify connection and active tab.
-2. Call browser_navigate({ url: "https://www.google.com" }) to open the website.
-3. Call browser_observe() or browser_snapshot() to locate interactive buttons and input fields.
-4. Call browser_type({ selector: "...", text: "query" }) or browser_click({ selector: "..." }).
-5. Call browser_screenshot() to visually verify results.
-6. Call browser_get_text() or browser_get_tables() to extract data and present a comprehensive final report.
+## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
+1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
+2. Call \`browser_observe()\` or \`browser_snapshot()\` to get \`@e1\`, \`@e2\` semantic refs.
+3. Use \`ref: "@eN"\` in \`browser_click\`, \`browser_fill\`, \`browser_type\`, and \`browser_hover\` — do NOT call \`browser_screenshot()\` after every click; use \`browser_observe()\` or post-action DOM summary instead.
+4. Use \`browser_download()\` for silent downloads and \`browser_confirm()\` before any delete/submit/payment action.
 
 ## 4. SAFETY RULES
 - Never read or extract values from type="password" fields.
@@ -790,22 +785,17 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
   }
 }
 
-## 0. FIRST-TIME TOKEN & SETUP (IF YOUR_AUTH_TOKEN)
-If BRIDGE_AUTH_TOKEN is "YOUR_AUTH_TOKEN":
-1. Generate a secure 64-character hex token via: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-2. Save it to .drishti-token in the repo root, configure MCP with that token, and start the bridge on-demand (never install OS auto-start scripts).
-3. Print the generated token and guide the user step-by-step:
-   - Open chrome://extensions/ -> Developer mode -> Load unpacked -> select apps/chrome-extension/dist
-   - Open Drishti Settings -> Connection & Bridge -> paste token -> Save Changes -> Run Ping.
+## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
+1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\` in known local workspaces). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
+2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client all --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\`
+   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in OpenCode/Antigravity/Claude/Cursor MCP configs, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
+3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
 
-## 3. HOW TO EXECUTE USER TASKS
-When the user gives you any browser task (e.g. "Open Google, search Java DSA tutorials, compare top 3 sites & write a report"):
-1. Call browser_status() to verify connection and active tab.
-2. Call browser_navigate({ url: "https://www.google.com" }) to open the website.
-3. Call browser_observe() or browser_snapshot() to locate interactive buttons and input fields.
-4. Call browser_type({ selector: "...", text: "query" }) or browser_click({ selector: "..." }).
-5. Call browser_screenshot() to visually verify results.
-6. Call browser_get_text() or browser_get_tables() to extract data and present a comprehensive final report.
+## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
+1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
+2. Call \`browser_observe()\` or \`browser_snapshot()\` to get \`@e1\`, \`@e2\` semantic refs.
+3. Use \`ref: "@eN"\` in \`browser_click\`, \`browser_fill\`, \`browser_type\`, and \`browser_hover\` — do NOT call \`browser_screenshot()\` after every click; use \`browser_observe()\` or post-action DOM summary instead.
+4. Use \`browser_download()\` for silent downloads and \`browser_confirm()\` before any delete/submit/payment action.
 
 ## 4. SAFETY RULES
 - Never read or extract values from type="password" fields.
@@ -899,6 +889,21 @@ When the user gives you any browser task (e.g. "Open Google, search Java DSA tut
                           {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bytes = new Uint8Array(32);
+                          crypto.getRandomValues(bytes);
+                          const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+                          setAuthToken(hex);
+                          setShowToken(true);
+                          setHasChanges(true);
+                        }}
+                        className="btn-interactive px-3.5 py-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-1.5"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Generate</span>
+                      </button>
                       <button
                         type="button"
                         onClick={handlePasteClipboard}

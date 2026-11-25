@@ -152,21 +152,20 @@ graph TD
 
 ---
 
-## 🤖 1-Prompt AI Auto-Install & Setup (Copy & Paste to Any AI Agent)
+## 🤖 1-Prompt AI Auto-Install & Setup (Zero-Clone Safe)
 
-Give this single prompt to **Google Antigravity**, **Claude Code**, **Cursor**, **OpenCode**, or **Codex** — the AI agent will automatically download the repo/extension from GitHub, build it, generate your 64-character auth token, configure MCP, and guide you step-by-step:
+Give this single prompt to **Google Antigravity**, **Claude Code**, **Cursor**, **OpenCode**, or **Codex** — it checks if Drishti is already installed (never re-cloning into unrelated projects), generates your 64-char token, registers MCP + the `drishti-browser-agent` skill automatically, and verifies `ONLINE` status:
 
 ```xml
 <DRISHTI_AUTO_INSTALL>
-Set up Drishti Browser AI (दृष्टि) on my machine so you can control my Chrome/Brave browser via MCP:
-1. Clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a clean local folder (or download the latest Release ZIP from GitHub Releases).
-2. Run `pnpm install && pnpm -r run build` inside the cloned folder to build the Chrome extension (`apps/chrome-extension/dist`), Local Bridge (`apps/local-bridge`), and MCP Server (`apps/mcp-server`).
-3. Generate a fresh 64-character hex auth token (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), save it to `.drishti-token` in the repo root, and print the token clearly for me.
-4. Configure my IDE MCP settings (`mcpServers.drishti-browser-ai`) pointing to `<repo-path>/apps/mcp-server/dist/index.js` with `BRIDGE_AUTH_TOKEN` and `BRIDGE_WS_URL=ws://127.0.0.1:7483`.
-5. Start the Local Bridge on-demand (`pnpm bridge:start` with `BRIDGE_AUTH_TOKEN` set) — never install OS auto-start scripts.
-6. Give me clear step-by-step instructions to:
-   - Open `chrome://extensions/` -> Enable Developer mode -> Click "Load unpacked" -> Select `<repo-path>/apps/chrome-extension/dist`.
-   - Open Drishti Settings -> Connection & Bridge -> Paste the 64-char token -> Click Save Changes -> Click Run Ping to verify `ONLINE`.
+Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave browser via MCP:
+1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
+2. Inside the Drishti folder, run `pnpm setup:agent -- --client all` (`node scripts/setup-agent.mjs --client all`):
+   - Auto-generates `.drishti-token` (64-char hex) if missing.
+   - Registers `drishti-browser-ai` in OpenCode (`~/.config/opencode/opencode.json`), Antigravity, Claude Code, and Cursor MCP configs.
+   - Installs `drishti-browser-agent/SKILL.md` into the agent skills folder so the skill loads automatically.
+3. Start the Local Bridge on-demand (`pnpm bridge:start`) — never install OS auto-start scripts.
+4. Guide me to paste the generated token in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping (or click Generate Token in Settings).
 </DRISHTI_AUTO_INSTALL>
 ```
 

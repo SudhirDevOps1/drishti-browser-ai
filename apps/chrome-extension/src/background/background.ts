@@ -338,8 +338,10 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
   // Automatically bind target/locked tab if tabId is omitted
   if (!payload.tabId && [
     'NAVIGATE', 'RELOAD', 'GO_BACK', 'GO_FORWARD', 'EXECUTE_SCRIPT',
-    'GET_DOM_SNAPSHOT', 'CLICK', 'HOVER', 'TYPE', 'SCROLL', 'PRESS_KEY',
-    'GET_PAGE_INFO', 'GET_CONSOLE_LOGS', 'SCREENSHOT'
+    'GET_DOM_SNAPSHOT', 'OBSERVE', 'browser_observe', 'GET_TEXT', 'GET_LINKS',
+    'FIND_ELEMENT', 'GET_TABLES', 'GET_FORMS', 'INSPECT', 'CLICK', 'HOVER',
+    'TYPE', 'SCROLL', 'SCROLL_INTO_VIEW', 'PRESS_KEY', 'SELECT_OPTION',
+    'WAIT', 'WAIT_FOR', 'DRAG', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS', 'SCREENSHOT'
   ].includes(action)) {
     payload.tabId = await resolveDefaultTabId();
   }
@@ -353,7 +355,12 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
         throw err;
       });
     }
-  } else if (['NAVIGATE', 'NEW_TAB', 'CLICK', 'HOVER', 'TYPE', 'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT', 'SCREENSHOT', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS'].includes(action)) {
+  } else if ([
+    'NAVIGATE', 'NEW_TAB', 'CLICK', 'HOVER', 'TYPE', 'DRAG', 'SELECT_OPTION',
+    'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT', 'OBSERVE', 'browser_observe',
+    'GET_TEXT', 'GET_LINKS', 'FIND_ELEMENT', 'GET_TABLES', 'GET_FORMS',
+    'INSPECT', 'SCREENSHOT', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS'
+  ].includes(action)) {
     let urlToCheck = payload.url as string | undefined;
     if (!urlToCheck && payload.tabId) {
       try {
@@ -379,6 +386,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'BRIDGE_HEALTH':     result = await getBridgeHealth(); break;
       case 'GET_TABS':          result = await getTabs(); break;
       case 'GET_ACTIVE_TAB':    result = await getActiveTab(); break;
+      case 'USE_TAB':           result = await useTab(payload); break;
       case 'NAVIGATE':          result = await navigate(payload); break;
       case 'NEW_TAB':           result = await newTab(payload); break;
       case 'CLOSE_TAB':         result = await closeTab(payload); break;
@@ -388,16 +396,29 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'GO_FORWARD':        result = await goForward(payload); break;
       case 'SCREENSHOT':        result = await takeScreenshot(payload); break;
       case 'EXECUTE_SCRIPT':    result = await executeScript(payload); break;
+      case 'OBSERVE':
+      case 'browser_observe':   result = await observePage(payload); break;
       case 'GET_DOM_SNAPSHOT':  result = await getDomSnapshot(payload); break;
+      case 'INSPECT':           result = await inspectElement(payload); break;
+      case 'GET_TEXT':          result = await getPageText(payload); break;
+      case 'GET_LINKS':         result = await getPageLinks(payload); break;
+      case 'FIND_ELEMENT':      result = await findPageElement(payload); break;
+      case 'GET_TABLES':        result = await getPageTables(payload); break;
+      case 'GET_FORMS':         result = await getPageForms(payload); break;
       case 'CLICK':             result = await clickElement(payload); break;
       case 'HOVER':             result = await hoverElement(payload); break;
       case 'TYPE':              result = await typeText(payload); break;
       case 'SCROLL':            result = await scrollPage(payload); break;
+      case 'SCROLL_INTO_VIEW':  result = await scrollIntoView(payload); break;
       case 'PRESS_KEY':         result = await pressKey(payload); break;
+      case 'SELECT_OPTION':     result = await selectOption(payload); break;
+      case 'DRAG':              result = await dragAndDrop(payload); break;
+      case 'WAIT':              result = await waitCommand(payload); break;
+      case 'WAIT_FOR':          result = await waitForCondition(payload); break;
+      case 'DOWNLOAD_MEDIA':    result = await downloadMedia(payload); break;
       case 'GET_PAGE_INFO':     result = await getPageInfo(payload); break;
       case 'GET_CONSOLE_LOGS':  result = await getConsoleLogs(payload); break;
-      case 'WAIT':               result = await waitCommand(payload); break;
-      case 'BATCH_COMPARE':      result = await batchCompare(payload); break;
+      case 'BATCH_COMPARE':     result = await batchCompare(payload); break;
       case 'GET_LEARNING_STATS': result = await getLearningStats(); break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -786,6 +807,7 @@ async function getDomSnapshot(payload: Record<string, unknown>): Promise<unknown
 // This function runs in the page context
 function extractDomSnapshot() {
   interface ElementSnapshot {
+    ref: string;
     selector: string;
     tag: string;
     type?: string;
@@ -804,9 +826,10 @@ function extractDomSnapshot() {
 
   const elements: ElementSnapshot[] = [];
   const interactive = document.querySelectorAll(
-    'a, button, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [tabindex]'
+    'a, button, input, select, textarea, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [tabindex]'
   );
 
+  let refIndex = 0;
   interactive.forEach((el, i) => {
     if (
       el.closest(
@@ -821,19 +844,26 @@ function extractDomSnapshot() {
       rect.height > 0 &&
       window.getComputedStyle(el).display !== 'none';
 
+    refIndex += 1;
+    const ref = `@e${refIndex}`;
+    try {
+      el.setAttribute('data-drishti-ref', ref);
+    } catch {}
+
     const snap: ElementSnapshot = {
+      ref,
       selector: el.id
         ? `#${el.id}`
-        : `${el.tagName.toLowerCase()}:nth-of-type(${i + 1})`,
+        : `[data-drishti-ref="${ref}"]`,
       tag: el.tagName.toLowerCase(),
-      text: (el.textContent || '').trim().slice(0, 200),
+      text: (el.textContent || '').trim().slice(0, 240),
       role: el.getAttribute('role') || undefined,
       ariaLabel: el.getAttribute('aria-label') || undefined,
       id: el.id || undefined,
-      classes: el.className
+      classes: typeof el.className === 'string' && el.className
         ? el.className.split(' ').filter(Boolean)
         : undefined,
-      bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
       visible: isVisible,
       interactive: true,
     };
@@ -990,7 +1020,9 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     const tab = await chrome.tabs.get(target);
     if (tab?.url) hostname = new URL(tab.url).hostname;
   } catch {}
-  const learnedSel = await lookupLearnedSelector(hostname, (payload.selector as string) || null);
+  const refSelector = payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null;
+  const resolvedInputSelector = (payload.selector as string) || refSelector;
+  const learnedSel = await lookupLearnedSelector(hostname, resolvedInputSelector);
 
   await yieldIfHumanActive();
 
@@ -1161,21 +1193,30 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
           throw new Error(`Element not found: ${selector}`);
         }
         await humanClick(el, 'AI CLICK');
-        return { clicked: selector };
+        return {
+          clicked: selector,
+          url: window.location.href,
+          title: document.title,
+          interactiveCount: document.querySelectorAll('a,button,input,select,textarea,[role="button"]').length,
+        };
       } else if (x !== null && y !== null) {
         const el = document.elementFromPoint(x, y) as HTMLElement;
         if (el) {
           await humanClick(el, 'AI CLICK');
-          return { clicked: `element at (${x},${y})` };
+          return {
+            clicked: `element at (${x},${y})`,
+            url: window.location.href,
+            title: document.title,
+          };
         }
         throw new Error(`No element at (${x},${y})`);
       }
       throw new Error('selector or coordinates required');
     },
     args: [
-      (payload.selector as string) || null,
-      (payload.x as number) || null,
-      (payload.y as number) || null,
+      resolvedInputSelector,
+      (payload.x as number) ?? null,
+      (payload.y as number) ?? null,
       learnedSel,
     ],
   });
@@ -1230,7 +1271,7 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: async (selector: string | null, text: string, clearFirst: boolean) => {
+    func: async (selector: string | null, text: string, clearFirst: boolean, instant: boolean) => {
       function glideCursorToRect(rect: DOMRect) {
         try {
           const w = window as unknown as { __drishtiCursorPos?: { x: number; y: number } };
@@ -1387,27 +1428,41 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
       }
 
       let currentVal = 'value' in el ? el.value : '';
-      for (const char of text) {
-        const keydown = new KeyboardEvent('keydown', { key: char, bubbles: true });
-        const keypress = new KeyboardEvent('keypress', { key: char, bubbles: true });
-        el.dispatchEvent(keydown);
-        el.dispatchEvent(keypress);
-        if ('value' in el) {
-          currentVal += char;
-          setNativeValue(el, currentVal);
+      const useInstant = instant || text.length > 40;
+      if (useInstant && 'value' in el) {
+        const nextVal = currentVal + text;
+        setNativeValue(el, nextVal);
+        el.dispatchEvent(new InputEvent('input', { data: text, bubbles: true, inputType: 'insertText' }));
+      } else {
+        for (const char of text) {
+          const keydown = new KeyboardEvent('keydown', { key: char, bubbles: true });
+          const keypress = new KeyboardEvent('keypress', { key: char, bubbles: true });
+          el.dispatchEvent(keydown);
+          el.dispatchEvent(keypress);
+          if ('value' in el) {
+            currentVal += char;
+            setNativeValue(el, currentVal);
+          }
+          el.dispatchEvent(new InputEvent('input', { data: char, bubbles: true, inputType: 'insertText' }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+          await new Promise((r) => setTimeout(r, 18));
         }
-        el.dispatchEvent(new InputEvent('input', { data: char, bubbles: true, inputType: 'insertText' }));
-        el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
-        await new Promise((r) => setTimeout(r, 28 + Math.floor(Math.random() * 24)));
       }
 
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { typed: text.length + ' characters', selfHealed: !document.querySelector(selector || '') };
+      return {
+        typed: text.length + ' characters',
+        instant: useInstant,
+        url: window.location.href,
+        title: document.title,
+        selfHealed: !document.querySelector(selector || ''),
+      };
     },
     args: [
-      (payload.selector as string) || null,
+      (payload.selector as string) || (payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null),
       payload.text as string,
-      !!(payload.clearFirst),
+      Boolean(payload.clearFirst ?? payload.clear),
+      Boolean(payload.instant),
     ],
   });
 
@@ -1938,3 +1993,375 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 });
+
+// ─── Silent Download Routing (Phase 3) ──────────────────────────────────────
+const pendingDownloadSubfolders = new Map<string, string>();
+
+if (chrome.downloads?.onDeterminingFilename) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    const subfolder = pendingDownloadSubfolders.get(item.url) || 'drishti-downloads';
+    pendingDownloadSubfolders.delete(item.url);
+    const baseName = (item.filename || 'download.bin').split(/[/\\]/).pop() || 'download.bin';
+    const safeSub = subfolder.replace(/[^a-zA-Z0-9_-]/g, '_');
+    suggest({ filename: `${safeSub}/${baseName}`, conflictAction: 'uniquify' });
+  });
+}
+
+async function resolveTargetTab(payload: Record<string, unknown>): Promise<number> {
+  const tabId = payload.tabId as number | undefined;
+  const target =
+    tabId ||
+    (await resolveDefaultTabId()) ||
+    (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (!target) throw new Error('No active tab');
+  return target;
+}
+
+function resolveSelectorOrRef(payload: Record<string, unknown>): string {
+  if (payload.selector) return String(payload.selector);
+  if (payload.ref) return `[data-drishti-ref="${String(payload.ref)}"]`;
+  throw new Error('selector or ref is required');
+}
+
+async function observePage(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: () => {
+      const headings = Array.from(document.querySelectorAll('h1,h2,h3')).slice(0, 20).map((h) => ({
+        level: h.tagName,
+        text: (h.textContent || '').trim().slice(0, 160),
+      }));
+      const interactive = Array.from(
+        document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="textbox"]')
+      ).slice(0, 60).map((el, i) => {
+        const ref = el.getAttribute('data-drishti-ref') || `@e${i + 1}`;
+        return {
+          ref,
+          tag: el.tagName.toLowerCase(),
+          role: el.getAttribute('role') || undefined,
+          label: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 100),
+        };
+      });
+      const visibleText = (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+      return {
+        url: window.location.href,
+        title: document.title,
+        headings,
+        interactiveCount: interactive.length,
+        interactive,
+        visibleTextSummary: visibleText,
+      };
+    },
+  });
+  return results[0]?.result;
+}
+
+async function getPageText(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string | null) => {
+      const root = selector ? document.querySelector(selector) : document.body;
+      if (!root) throw new Error(`Element not found: ${selector}`);
+      return {
+        url: window.location.href,
+        text: ((root as HTMLElement).innerText || root.textContent || '').trim().slice(0, 16000),
+      };
+    },
+    args: [(payload.selector as string) || null],
+  });
+  return results[0]?.result;
+}
+
+async function getPageLinks(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (filter: string | null) => {
+      const links = Array.from(document.querySelectorAll('a[href]')).map((a) => {
+        const href = (a as HTMLAnchorElement).href;
+        const text = (a.textContent || '').trim().slice(0, 160);
+        return {
+          text,
+          href,
+          type: href.startsWith(window.location.origin) ? 'internal' : 'external',
+        };
+      });
+      const filtered = filter
+        ? links.filter((l) => l.text.toLowerCase().includes(filter.toLowerCase()) || l.href.toLowerCase().includes(filter.toLowerCase()))
+        : links;
+      return { count: filtered.length, links: filtered.slice(0, 200) };
+    },
+    args: [(payload.filter as string) || null],
+  });
+  return results[0]?.result;
+}
+
+async function findPageElement(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const query = String(payload.query || '').trim();
+  if (!query) throw new Error('query is required');
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (q: string) => {
+      const lower = q.toLowerCase();
+      const matches: Array<{ selector: string; ref?: string; tag: string; role?: string; text: string; bounds: { x: number; y: number; width: number; height: number } }> = [];
+      try {
+        const direct = document.querySelectorAll(q);
+        direct.forEach((el) => {
+          const r = el.getBoundingClientRect();
+          matches.push({
+            selector: q,
+            ref: el.getAttribute('data-drishti-ref') || undefined,
+            tag: el.tagName.toLowerCase(),
+            role: el.getAttribute('role') || undefined,
+            text: (el.textContent || '').trim().slice(0, 160),
+            bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+          });
+        });
+      } catch {}
+
+      if (matches.length === 0) {
+        const all = Array.from(document.querySelectorAll('a,button,input,select,textarea,[role],[aria-label],[tabindex],h1,h2,h3,label,span,div'));
+        for (let i = 0; i < all.length && matches.length < 15; i++) {
+          const el = all[i];
+          const text = (el.textContent || '').trim();
+          const aria = el.getAttribute('aria-label') || '';
+          const role = el.getAttribute('role') || '';
+          const placeholder = el.getAttribute('placeholder') || '';
+          if (
+            text.toLowerCase().includes(lower) ||
+            aria.toLowerCase().includes(lower) ||
+            role.toLowerCase() === lower ||
+            placeholder.toLowerCase().includes(lower)
+          ) {
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            const ref = el.getAttribute('data-drishti-ref') || `@f${matches.length + 1}`;
+            try { el.setAttribute('data-drishti-ref', ref); } catch {}
+            matches.push({
+              selector: el.id ? `#${el.id}` : `[data-drishti-ref="${ref}"]`,
+              ref,
+              tag: el.tagName.toLowerCase(),
+              role: role || undefined,
+              text: (aria || text || placeholder).slice(0, 160),
+              bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+            });
+          }
+        }
+      }
+      return { query: q, count: matches.length, matches };
+    },
+    args: [query],
+  });
+  return results[0]?.result;
+}
+
+async function getPageTables(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: () => {
+      const tables = Array.from(document.querySelectorAll('table')).slice(0, 20).map((t) => {
+        const headers = Array.from(t.querySelectorAll('thead th, tr:first-child th')).map((th) => (th.textContent || '').trim());
+        const rows = Array.from(t.querySelectorAll('tbody tr, tr')).slice(0, 100).map((tr) =>
+          Array.from(tr.querySelectorAll('td, th')).map((cell) => (cell.textContent || '').trim())
+        );
+        return { headers, rows };
+      });
+      return { count: tables.length, tables };
+    },
+  });
+  return results[0]?.result;
+}
+
+async function getPageForms(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: () => {
+      const fields = Array.from(document.querySelectorAll('input, textarea, select')).map((el, i) => {
+        const inp = el as HTMLInputElement;
+        const id = el.id;
+        const labelEl = id ? document.querySelector(`label[for="${CSS.escape(id)}"]`) : el.closest('label');
+        const type = el.tagName.toLowerCase() === 'input' ? inp.type || 'text' : el.tagName.toLowerCase();
+        return {
+          selector: id ? `#${id}` : inp.name ? `[name="${inp.name}"]` : `${el.tagName.toLowerCase()}:nth-of-type(${i + 1})`,
+          name: inp.name || undefined,
+          type,
+          label: (labelEl?.textContent || el.getAttribute('aria-label') || '').trim() || undefined,
+          placeholder: inp.placeholder || undefined,
+          value: type === 'password' ? undefined : inp.value,
+          required: inp.required || el.hasAttribute('required'),
+        };
+      });
+      return { count: fields.length, fields };
+    },
+  });
+  return results[0]?.result;
+}
+
+async function inspectElement(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const sel = resolveSelectorOrRef(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string) => {
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (!el) throw new Error(`Element not found: ${selector}`);
+      const r = el.getBoundingClientRect();
+      const cs = window.getComputedStyle(el);
+      const attrs: Record<string, string> = {};
+      for (const a of Array.from(el.attributes)) attrs[a.name] = a.value;
+      return {
+        tag: el.tagName.toLowerCase(),
+        text: (el.innerText || el.textContent || '').trim().slice(0, 500),
+        attributes: attrs,
+        bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+        styles: { display: cs.display, visibility: cs.visibility, color: cs.color, backgroundColor: cs.backgroundColor },
+      };
+    },
+    args: [sel],
+  });
+  return results[0]?.result;
+}
+
+async function selectOption(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const sel = resolveSelectorOrRef(payload);
+  const val = String(payload.value ?? '');
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string, optionVal: string) => {
+      const select = document.querySelector(selector) as HTMLSelectElement | null;
+      if (!select) throw new Error(`Select element not found: ${selector}`);
+      const opt = Array.from(select.options).find((o) => o.value === optionVal || o.text.trim() === optionVal);
+      if (!opt) throw new Error(`Option not found: ${optionVal}`);
+      select.value = opt.value;
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return { selected: opt.value, text: opt.text.trim() };
+    },
+    args: [sel, val],
+  });
+  return results[0]?.result;
+}
+
+async function scrollIntoView(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const sel = resolveSelectorOrRef(payload);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string) => {
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (!el) throw new Error(`Element not found: ${selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      const r = el.getBoundingClientRect();
+      return { scrolledIntoView: selector, bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } };
+    },
+    args: [sel],
+  });
+  return results[0]?.result;
+}
+
+async function waitForCondition(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const selector = (payload.selector as string) || null;
+  const text = (payload.text as string) || null;
+  const timeout = Math.min(Number(payload.timeout ?? 15000), 60000);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: async (sel: string | null, txt: string | null, maxMs: number) => {
+      const start = Date.now();
+      while (Date.now() - start < maxMs) {
+        const selMatched = !sel || Boolean(document.querySelector(sel));
+        const txtMatched = !txt || (document.body?.innerText || '').includes(txt);
+        if (selMatched && txtMatched) {
+          return { matched: true, waitedMs: Date.now() - start, selector: sel, text: txt };
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      throw new Error(`wait_for timed out after ${maxMs}ms (selector=${sel}, text=${txt})`);
+    },
+    args: [selector, text, timeout],
+  });
+  return results[0]?.result;
+}
+
+async function dragAndDrop(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const fromSel = payload.fromSelector ? String(payload.fromSelector) : payload.fromRef ? `[data-drishti-ref="${String(payload.fromRef)}"]` : null;
+  const toSel = payload.toSelector ? String(payload.toSelector) : payload.toRef ? `[data-drishti-ref="${String(payload.toRef)}"]` : null;
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (fSel: string | null, tSel: string | null, fx: number | null, fy: number | null, tx: number | null, ty: number | null) => {
+      const fromEl = fSel ? document.querySelector(fSel) : fx !== null && fy !== null ? document.elementFromPoint(fx, fy) : null;
+      const toEl = tSel ? document.querySelector(tSel) : tx !== null && ty !== null ? document.elementFromPoint(tx, ty) : null;
+      if (!fromEl || !toEl) throw new Error('Source or target element not found for drag');
+      const fr = fromEl.getBoundingClientRect();
+      const tr = toEl.getBoundingClientRect();
+      const sx = fx ?? Math.round(fr.left + fr.width / 2);
+      const sy = fy ?? Math.round(fr.top + fr.height / 2);
+      const ex = tx ?? Math.round(tr.left + tr.width / 2);
+      const ey = ty ?? Math.round(tr.top + tr.height / 2);
+      const dt = new DataTransfer();
+      fromEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: sx, clientY: sy }));
+      fromEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt, clientX: sx, clientY: sy }));
+      toEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: ex, clientY: ey }));
+      toEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: ex, clientY: ey }));
+      fromEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt, clientX: ex, clientY: ey }));
+      toEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: ex, clientY: ey }));
+      return { dragged: true, from: { x: sx, y: sy }, to: { x: ex, y: ey } };
+    },
+    args: [fromSel, toSel, (payload.fromX as number) ?? null, (payload.fromY as number) ?? null, (payload.toX as number) ?? null, (payload.toY as number) ?? null],
+  });
+  return results[0]?.result;
+}
+
+async function useTab(payload: Record<string, unknown>): Promise<unknown> {
+  const tabId = (payload.tabId as number | null | undefined) ?? null;
+  await chrome.storage.local.set({ lockedTabId: tabId });
+  if (tabId) {
+    await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+  }
+  return { lockedTabId: tabId, unlocked: tabId === null };
+}
+
+async function downloadMedia(payload: Record<string, unknown>): Promise<unknown> {
+  const url = String(payload.url || '');
+  if (!url) throw new Error('url is required for DOWNLOAD_MEDIA');
+  const subfolder = String(payload.subfolder || 'drishti-downloads').replace(/[^a-zA-Z0-9_-]/g, '_');
+  pendingDownloadSubfolders.set(url, subfolder);
+
+  const requestedFilename = payload.filename
+    ? `${subfolder}/${String(payload.filename).split(/[/\\]/).pop()}`
+    : undefined;
+
+  const downloadId = await chrome.downloads.download({
+    url,
+    filename: requestedFilename,
+    saveAs: false,
+    conflictAction: 'uniquify',
+  });
+
+  // Wait up to 30s for download completion
+  const completed = await new Promise<{ id: number; filename: string; fileSize: number; state: string }>((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      const [item] = await chrome.downloads.search({ id: downloadId });
+      if (item?.state === 'complete') {
+        clearInterval(timer);
+        resolve({ id: downloadId, filename: item.filename, fileSize: item.fileSize, state: item.state });
+      } else if (item?.state === 'interrupted') {
+        clearInterval(timer);
+        reject(new Error(`Download interrupted: ${item.error || 'unknown'}`));
+      } else if (Date.now() - started > 30000) {
+        clearInterval(timer);
+        resolve({ id: downloadId, filename: item?.filename || requestedFilename || '', fileSize: item?.bytesReceived || 0, state: item?.state || 'in_progress' });
+      }
+    }, 300);
+  });
+
+  return completed;
+}

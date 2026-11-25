@@ -4,6 +4,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { BridgeClient } from '../bridge-client.js';
+import { MemoryStore } from '../db/memory-store.js';
 import { BROWSER_TOOLS, handleBrowserTool } from './browser.tools.js';
 import { NAVIGATION_TOOLS, handleNavigationTool } from './navigation.tools.js';
 import { TAB_TOOLS, handleTabTool } from './tab.tools.js';
@@ -11,6 +12,7 @@ import { INTERACTION_TOOLS, handleInteractionTool } from './interaction.tools.js
 import { CONTENT_TOOLS, handleContentTool } from './content.tools.js';
 import { AUTOMATION_TOOLS, handleAutomationTool } from './automation.tools.js';
 import { DEBUGGING_TOOLS, handleDebuggingTool } from './debugging.tools.js';
+import { WORKFLOW_TOOLS, handleWorkflowTool } from './workflow.tools.js';
 
 export const ALL_TOOLS = [
   ...BROWSER_TOOLS,
@@ -20,20 +22,18 @@ export const ALL_TOOLS = [
   ...CONTENT_TOOLS,
   ...AUTOMATION_TOOLS,
   ...DEBUGGING_TOOLS,
+  ...WORKFLOW_TOOLS,
 ];
 
-export function registerAllTools(server: Server, bridge: BridgeClient): void {
-  // 1. Centralized Tools Listing (Exposes all 36 MCP tools)
+export function registerAllTools(server: Server, bridge: BridgeClient, store: MemoryStore): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: ALL_TOOLS,
   }));
 
-  // 2. Centralized Tools Execution Dispatcher
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
-      // Dispatch in order
       const browserRes = await handleBrowserTool(name, args, bridge);
       if (browserRes !== undefined) return browserRes;
 
@@ -54,6 +54,9 @@ export function registerAllTools(server: Server, bridge: BridgeClient): void {
 
       const debugRes = await handleDebuggingTool(name, args, bridge);
       if (debugRes !== undefined) return debugRes;
+
+      const wfRes = await handleWorkflowTool(name, args, bridge, store);
+      if (wfRes !== undefined) return wfRes;
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ error: `Unknown tool: ${name}` }) }],

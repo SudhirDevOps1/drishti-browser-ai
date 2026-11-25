@@ -10,35 +10,59 @@ function ok(result: unknown): ToolResponse {
 
 const ClickSchema = z.object({
   selector: z.string().optional().describe('CSS selector of the element to click.'),
-  x: z.number().optional().describe('X coordinate to click (used when no selector provided).'),
-  y: z.number().optional().describe('Y coordinate to click (used when no selector provided).'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot (auto-heals across viewport resizes).'),
+  x: z.number().optional().describe('X coordinate to click (used when no selector/ref provided).'),
+  y: z.number().optional().describe('Y coordinate to click (used when no selector/ref provided).'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   button: z.enum(['left', 'right', 'middle']).optional().describe('Mouse button to use. Default: left.'),
 });
 
 const DoubleClickSchema = z.object({
   selector: z.string().optional().describe('CSS selector of the element to double-click.'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   x: z.number().optional().describe('X coordinate to double-click.'),
   y: z.number().optional().describe('Y coordinate to double-click.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
 });
 
 const HoverSchema = z.object({
-  selector: z.string().describe('CSS selector of the element to hover over.'),
+  selector: z.string().optional().describe('CSS selector of the element to hover over.'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
 });
 
 const TypeSchema = z.object({
   text: z.string().describe('Text to type.'),
   selector: z.string().optional().describe('CSS selector of the input element. Types into active element if omitted.'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   clearFirst: z.boolean().optional().describe('Clear existing content before typing. Default: false.'),
+  instant: z.boolean().optional().describe('Insert text immediately without key-by-key delay. Auto-enabled for long text (>40 chars).'),
 });
 
 const FillSchema = z.object({
-  selector: z.string().describe('CSS selector of the form field to fill.'),
+  selector: z.string().optional().describe('CSS selector of the form field to fill.'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   value: z.string().describe('Value to set on the field.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
+});
+
+const DragSchema = z.object({
+  fromSelector: z.string().optional().describe('CSS selector of the source element to drag.'),
+  fromRef: z.string().optional().describe('Semantic @eN ref of the source element.'),
+  toSelector: z.string().optional().describe('CSS selector of the drop target.'),
+  toRef: z.string().optional().describe('Semantic @eN ref of the drop target.'),
+  fromX: z.number().optional().describe('Source X coordinate.'),
+  fromY: z.number().optional().describe('Source Y coordinate.'),
+  toX: z.number().optional().describe('Target X coordinate.'),
+  toY: z.number().optional().describe('Target Y coordinate.'),
+  tabId: z.number().int().optional().describe('Target tab ID.'),
+});
+
+const ScrollIntoViewSchema = z.object({
+  selector: z.string().optional().describe('CSS selector of element to scroll into viewport.'),
+  ref: z.string().optional().describe('Semantic @eN ref of element to scroll into viewport.'),
+  tabId: z.number().int().optional().describe('Target tab ID.'),
 });
 
 const PressKeySchema = z.object({
@@ -180,6 +204,38 @@ export const INTERACTION_TOOLS = [
       required: ['selector', 'value'],
     },
   },
+  {
+    name: 'browser_drag',
+    description: 'Drag and drop from a source element/ref/coordinates to a target element/ref/coordinates.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        fromSelector: { type: 'string' },
+        fromRef: { type: 'string' },
+        toSelector: { type: 'string' },
+        toRef: { type: 'string' },
+        fromX: { type: 'number' },
+        fromY: { type: 'number' },
+        toX: { type: 'number' },
+        toY: { type: 'number' },
+        tabId: { type: 'number' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'browser_scroll_into_view',
+    description: 'Scroll an element (by selector or @eN ref) smoothly into the center of the viewport.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        selector: { type: 'string' },
+        ref: { type: 'string' },
+        tabId: { type: 'number' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -204,7 +260,16 @@ export async function handleInteractionTool(name: string, args: unknown, bridge:
     }
     case 'browser_fill': {
       const params = FillSchema.parse(args ?? {});
-      return ok(await bridge.sendCommand('TYPE', { selector: params.selector, text: params.value, clear: true }));
+      return ok(
+        await bridge.sendCommand('TYPE', {
+          selector: params.selector,
+          ref: params.ref,
+          text: params.value,
+          clearFirst: true,
+          instant: true,
+          tabId: params.tabId,
+        })
+      );
     }
     case 'browser_press_key': {
       const params = PressKeySchema.parse(args ?? {});
@@ -217,6 +282,14 @@ export async function handleInteractionTool(name: string, args: unknown, bridge:
     case 'browser_select': {
       const params = SelectSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('SELECT_OPTION', params));
+    }
+    case 'browser_drag': {
+      const params = DragSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('DRAG', params));
+    }
+    case 'browser_scroll_into_view': {
+      const params = ScrollIntoViewSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('SCROLL_INTO_VIEW', params));
     }
     default:
       return undefined;

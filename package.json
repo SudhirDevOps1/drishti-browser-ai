@@ -25,6 +25,7 @@
     "version:verify": "node scripts/version.mjs verify",
     "bridge:start": "pnpm --filter local-bridge run start",
     "mcp:start": "pnpm --filter mcp-server run start",
+    "setup:agent": "node scripts/setup-agent.mjs",
     "ext:build": "pnpm --filter chrome-extension run build",
     "ext:dev": "pnpm --filter chrome-extension run dev"
   },

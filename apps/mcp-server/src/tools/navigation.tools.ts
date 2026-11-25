@@ -33,6 +33,13 @@ const WaitSchema = z.object({
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
 });
 
+const WaitForSchema = z.object({
+  selector: z.string().optional().describe('CSS selector to wait for.'),
+  text: z.string().optional().describe('Visible text substring to wait for on the page.'),
+  timeout: z.number().int().min(100).max(60000).optional().describe('Maximum wait time in ms. Default: 15000.'),
+  tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const NAVIGATION_TOOLS = [
@@ -97,6 +104,21 @@ export const NAVIGATION_TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'browser_wait_for',
+    description:
+      'Condition-based wait for a CSS selector or visible text substring to appear, instead of guessing fixed millisecond delays.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        selector: { type: 'string', description: 'CSS selector to wait for.' },
+        text: { type: 'string', description: 'Visible text substring to wait for.' },
+        timeout: { type: 'number', description: 'Timeout in ms (default 15000).' },
+        tabId: { type: 'number', description: 'Target tab ID. Defaults to active tab.' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -130,6 +152,12 @@ export async function handleNavigationTool(name: string, args: unknown, bridge: 
     case 'browser_wait': {
       const params = WaitSchema.parse(args ?? {});
       const result = await bridge.sendCommand('WAIT', params);
+      return ok(result);
+    }
+
+    case 'browser_wait_for': {
+      const params = WaitForSchema.parse(args ?? {});
+      const result = await bridge.sendCommand('WAIT_FOR', params);
       return ok(result);
     }
 

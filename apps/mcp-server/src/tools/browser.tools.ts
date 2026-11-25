@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import { BridgeClient } from '../bridge-client.js';
 
+export type ToolContent =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
+
 export type ToolResponse = {
-  content: Array<{ type: 'text'; text: string }>;
+  content: ToolContent[];
   isError?: boolean;
 };
 
@@ -30,7 +34,8 @@ const BrowserScreenshotSchema = z.object({
 });
 
 const BrowserInspectSchema = z.object({
-  selector: z.string().describe('CSS selector of the element to inspect.'),
+  selector: z.string().optional().describe('CSS selector of the element to inspect.'),
+  ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
 });
 
@@ -58,7 +63,7 @@ export const BROWSER_TOOLS = [
   {
     name: 'browser_observe',
     description:
-      'Returns a full page observation for the specified (or active) tab: URL, title, accessibility tree summary, and a visible-text summary. Use this to understand what the page shows without reading raw HTML.',
+      'Returns a full page observation for the specified (or active) tab: URL, title, accessibility tree summary, and a visible-text summary. Use this to understand what the page shows without taking a screenshot.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -70,7 +75,7 @@ export const BROWSER_TOOLS = [
   {
     name: 'browser_snapshot',
     description:
-      'Returns a structured DOM snapshot with an element list (tag, text, attributes, bounding box). Optionally includes raw HTML.',
+      'Returns a structured DOM snapshot with semantic @e1/@e2 ref IDs, full accessible labels, bounding boxes, and CSS selectors.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -83,7 +88,7 @@ export const BROWSER_TOOLS = [
   {
     name: 'browser_screenshot',
     description:
-      'Captures a screenshot of the specified (or active) tab and returns it as a base64-encoded image string.',
+      'Captures a screenshot of the specified (or active) tab and returns it inline as an image plus metadata.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -97,14 +102,15 @@ export const BROWSER_TOOLS = [
   {
     name: 'browser_inspect',
     description:
-      'Returns full ElementInfo (computed styles, attributes, bounding box, inner text, ARIA properties) for the first element matching the given CSS selector.',
+      'Returns full ElementInfo (computed styles, attributes, bounding box, inner text, ARIA properties) for the element matching the selector or @eN ref.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         selector: { type: 'string', description: 'CSS selector of the element to inspect.' },
+        ref: { type: 'string', description: 'Semantic @eN ref from browser_snapshot.' },
         tabId: { type: 'number', description: 'Target tab ID. Defaults to active tab.' },
       },
-      required: ['selector'],
+      required: [],
     },
   },
   {
@@ -163,7 +169,7 @@ export async function handleBrowserTool(name: string, args: unknown, bridge: Bri
 
     case 'browser_observe': {
       const params = BrowserObserveSchema.parse(args ?? {});
-      const result = await bridge.sendCommand('browser_observe', params);
+      const result = await bridge.sendCommand('OBSERVE', params);
       return ok(result);
     }
 
@@ -175,13 +181,33 @@ export async function handleBrowserTool(name: string, args: unknown, bridge: Bri
 
     case 'browser_screenshot': {
       const params = BrowserScreenshotSchema.parse(args ?? {});
-      const result = await bridge.sendCommand('SCREENSHOT', params);
+      const result = (await bridge.sendCommand('SCREENSHOT', params)) as {
+        base64?: string;
+        format?: 'png' | 'jpeg';
+        size?: number;
+      };
+      if (result?.base64) {
+        const mimeType = result.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+        return {
+          content: [
+            { type: 'image' as const, data: result.base64, mimeType },
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                format: result.format || 'png',
+                size: result.size ?? result.base64.length,
+                note: 'Inline image attached above. Tip: use browser_observe or post-action DOM summary instead of screenshots after every click.',
+              }),
+            },
+          ],
+        };
+      }
       return ok(result);
     }
 
     case 'browser_inspect': {
       const params = BrowserInspectSchema.parse(args ?? {});
-      const result = await bridge.sendCommand('EXECUTE_SCRIPT', params);
+      const result = await bridge.sendCommand('INSPECT', params);
       return ok(result);
     }
 
