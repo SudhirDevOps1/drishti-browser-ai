@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface SaveDialogOptions {
   filename?: string;
@@ -12,6 +14,7 @@ export interface SaveDialogResult {
   processName?: string;
   windowTitle?: string;
   targetPath?: string;
+  engine?: string;
   reason?: string;
 }
 
@@ -28,9 +31,33 @@ export function buildSaveAsTargetPath(folder?: string, filename?: string): strin
   return undefined;
 }
 
+function tryPythonAutoSave(targetPath: string | undefined, timeoutMs: number): Promise<SaveDialogResult | null> {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const scriptPath = path.resolve(dir, '../../../scripts/auto_save.py');
+  if (!fs.existsSync(scriptPath)) return Promise.resolve(null);
+
+  const args = [scriptPath, '--timeout', String(timeoutMs)];
+  if (targetPath) args.push('--target', targetPath);
+
+  return new Promise((resolve) => {
+    execFile('python', args, { timeout: timeoutMs + 4000 }, (err, stdout) => {
+      if (err && !stdout) {
+        resolve(null);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout.trim()) as SaveDialogResult);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
 /**
  * Safely confirms a native Windows `#32770` "Save As" dialog owned exclusively
  * by Chrome, Brave, or Edge without touching any other application windows.
+ * Uses `scripts/auto_save.py` (Win32 ctypes) first, falling back to PowerShell UIAutomation.
  */
 export async function confirmBrowserSaveDialog(options: SaveDialogOptions = {}): Promise<SaveDialogResult> {
   if (process.platform !== 'win32') {
@@ -39,6 +66,10 @@ export async function confirmBrowserSaveDialog(options: SaveDialogOptions = {}):
 
   const timeoutMs = Math.min(Math.max(Number(options.timeoutMs ?? 8000), 1000), 30000);
   const targetPath = buildSaveAsTargetPath(options.folder, options.filename);
+
+  const pyResult = await tryPythonAutoSave(targetPath, timeoutMs);
+  if (pyResult) return pyResult;
+
   const escapedTarget = targetPath ? targetPath.replace(/'/g, "''") : '';
 
   const psScript = `
