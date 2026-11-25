@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BookOpen,
   Check,
+  ChevronLeft,
   ChevronRight,
   Code2,
   Copy,
@@ -18,36 +19,46 @@ import {
   Github,
   Layers,
   Lock,
+  Menu,
   Mic,
   MousePointer2,
   Package,
   Play,
   Search,
-  Send,
   ShieldCheck,
   Sparkles,
   Star,
   Terminal,
   Wifi,
+  Wrench,
   X,
   Zap,
 } from 'lucide-react';
+import { HeroCanvas } from './components/HeroCanvas';
 import siteData from './generated/site-data.json';
 
 gsap.registerPlugin(ScrollTrigger);
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface DocEntry { id: string; title: string; category: string; file: string; content: string; }
-interface SiteData { version: string; repoUrl: string; docs: DocEntry[]; changelog?: string; generatedAt: string; }
+interface McpToolEntry { name: string; category: string; description: string; }
+interface SiteData {
+  version: string;
+  repoUrl: string;
+  docs: DocEntry[];
+  mcpTools?: McpToolEntry[];
+  changelog?: string;
+  generatedAt: string;
+}
 
 const data = siteData as SiteData;
 
 /* ─── Static data ────────────────────────────────────────── */
 const STATS = [
-  { value: 35, suffix: '+', label: 'MCP Tools', icon: Zap },
+  { value: data.mcpTools?.length || 37, suffix: '', label: 'MCP Tools', icon: Zap },
   { value: 19, suffix: '', label: 'Unit Tests', icon: Check },
   { value: 4, suffix: '', label: 'E2E Playwright', icon: Play },
-  { value: 10, suffix: '', label: 'Doc Guides', icon: BookOpen },
+  { value: data.docs.length || 10, suffix: '', label: 'Doc Guides', icon: BookOpen },
   { value: 7, suffix: '', label: 'Packages', icon: Package },
   { value: 5, suffix: '+', label: 'AI Agents', icon: Star },
 ];
@@ -79,7 +90,7 @@ const FEATURES = [
   },
   {
     icon: Cpu,
-    title: '35+ MCP Automation Tools',
+    title: '37 Official MCP Tools',
     badge: 'Universal Agents',
     color: 'cyan',
     desc: 'Works with Antigravity, Claude Code, Cursor, OpenCode, and Codex over strict Zod v4 validated MCP stdio schemas.',
@@ -110,7 +121,7 @@ const PACKAGES = [
   { name: '@drishti/visual-engine',     role: 'Viewport Capture & Visual Diffing',    color: 'violet' },
   { name: '@drishti/browser-core',      role: 'Controller, Observer & Action Exec',   color: 'cyan' },
   { name: '@drishti/workflow-engine',   role: 'Task Queue & Multi-Step Orchestration',color: 'amber' },
-  { name: '@drishti/mcp-tools',         role: '35 MCP Tool Definitions (stdio)',       color: 'sky' },
+  { name: '@drishti/mcp-tools',         role: '37 MCP Tool Definitions (stdio)',      color: 'sky' },
 ];
 
 const CHANNELS = [
@@ -120,10 +131,14 @@ const CHANNELS = [
   { tag: 'x.x.x',         stage: 'Stable', desc: 'SHA-256 artifacts + categorized CHANGELOG', dot: 'bg-emerald-400' },
 ];
 
+type GalleryCategory = 'All' | 'Extension UI' | 'Motion & Voice' | 'Security & CI';
+
 interface GalleryItem {
   id: string;
   title: string;
+  category: Exclude<GalleryCategory, 'All'>;
   desc: string;
+  image?: string;
   specs: string[];
   tags: string[];
   border: string;
@@ -133,25 +148,61 @@ interface GalleryItem {
 const GALLERY_ITEMS: GalleryItem[] = [
   {
     id: 'sidepanel',
-    title: 'Control Deck Sidepanel',
-    desc: 'Two-way mission dispatch between Chrome Sidepanel and AI agents with inline status banner, voice mic, and 1-click macros.',
-    specs: ['React 18 + Tailwind CSS', 'Zero-emoji lucide-react UI', 'Two-way WebSocket mission queue'],
-    tags: ['React', 'MV3 Sidepanel', 'Lucide'],
+    title: 'Control Deck Sidepanel (Real UI)',
+    category: 'Extension UI',
+    image: './gallery/sidepanel-control-deck.png',
+    desc: 'Actual built MV3 Sidepanel UI with two-way AI mission dispatch, EN/HI Voice toggle, 1-click macros, and live error drawer.',
+    specs: ['Captured directly from Chromium MV3 build', 'Zero-emoji lucide-react icons', 'Two-way WebSocket mission queue'],
+    tags: ['Real Screenshot', 'MV3 Sidepanel', 'React 18'],
     border: 'border-cyan-500/30',
     glow: 'from-cyan-500/15 to-blue-600/10',
   },
   {
-    id: 'bezier',
-    title: 'Shadow DOM Bezier Cursor',
-    desc: 'Smooth human-like cubic Bezier trajectories with fading SVG trail, target element highlight ring, and concentric click ripple.',
-    specs: ['Isolated Shadow DOM overlay', 'Fitts law easing curve', 'Auto-cleanup after idle'],
-    tags: ['Shadow DOM', 'SVG Trail', 'GSAP'],
+    id: 'popup',
+    title: 'Extension Popup Quick Deck (Real UI)',
+    category: 'Extension UI',
+    image: './gallery/popup-quick-status.png',
+    desc: 'Instant popup showing live 127.0.0.1:7483 bridge status, SSOT version badge, and quick Control Deck launch.',
+    specs: ['Captured directly from Chromium MV3 build', 'Live bridge heartbeat indicator', 'SSOT v' + data.version + ' badge'],
+    tags: ['Real Screenshot', 'Popup UI', 'Tailwind'],
     border: 'border-sky-500/30',
     glow: 'from-sky-500/15 to-indigo-600/10',
   },
   {
+    id: 'options',
+    title: 'Permissions & Settings (Real UI)',
+    category: 'Extension UI',
+    image: './gallery/options-permissions.png',
+    desc: 'Dedicated Options page for managing domain allowlists, blocklists, automation scope, and security controls.',
+    specs: ['Captured directly from Chromium MV3 build', 'Domain allowlist & blocklist policy', 'Per-action safety configuration'],
+    tags: ['Real Screenshot', 'Options Page', 'Security'],
+    border: 'border-emerald-500/30',
+    glow: 'from-emerald-500/15 to-teal-600/10',
+  },
+  {
+    id: 'bezier',
+    title: 'Shadow DOM Bezier Cursor',
+    category: 'Motion & Voice',
+    desc: 'Smooth human-like cubic Bezier trajectories with fading SVG trail, target element highlight ring, and concentric click ripple.',
+    specs: ['Isolated Shadow DOM overlay', 'Fitts law easing curve', 'Auto-cleanup after idle'],
+    tags: ['Shadow DOM', 'SVG Trail', 'GSAP'],
+    border: 'border-cyan-500/30',
+    glow: 'from-cyan-500/15 to-sky-600/10',
+  },
+  {
+    id: 'voice',
+    title: 'Voice Commands (EN/HI) & Macros',
+    category: 'Motion & Voice',
+    desc: 'Speak browser commands in English or Hindi and save repeatable multi-step workflows as 1-click macro chips.',
+    specs: ['Bilingual en-IN / hi-IN recognition', 'Local chrome.storage.local macros', 'Instant dispatch to MCP bridge'],
+    tags: ['Web Speech', 'EN / HI', 'Macros'],
+    border: 'border-violet-500/30',
+    glow: 'from-violet-500/15 to-purple-600/10',
+  },
+  {
     id: 'telemetry',
     title: 'Live Console & Network Drawer',
+    category: 'Security & CI',
     desc: 'MAIN-world hooks stream uncaught errors, console.error, and 4xx/5xx fetch/XHR failures straight into the Sidepanel.',
     specs: ['Zero DevTools required', 'Captures HTTP 4xx/5xx status', 'One-click Send Error to AI'],
     tags: ['MAIN-world', 'Fetch/XHR', 'Telemetry'],
@@ -159,17 +210,9 @@ const GALLERY_ITEMS: GalleryItem[] = [
     glow: 'from-rose-500/15 to-pink-600/10',
   },
   {
-    id: 'voice',
-    title: 'Voice Commands (EN/HI) & Macros',
-    desc: 'Speak browser commands in English or Hindi and save repeatable multi-step workflows as 1-click macro chips.',
-    specs: ['Bilingual EN-IN / hi-IN recognition', 'Local chrome.storage.local macros', 'Instant dispatch to MCP bridge'],
-    tags: ['Web Speech', 'EN / HI', 'Macros'],
-    border: 'border-violet-500/30',
-    glow: 'from-violet-500/15 to-purple-600/10',
-  },
-  {
     id: 'security',
     title: '127.0.0.1 Token Auth & MV3 Guard',
+    category: 'Security & CI',
     desc: '64-character timing-safe session token, strict origin allowlist, protocol enforcement, and zero eval() sinks.',
     specs: ['Localhost-only ws://127.0.0.1:7483', 'Zod v4 strict schema validation', 'Automated security sink scan'],
     tags: ['Zod v4', '127.0.0.1', 'Zero eval()'],
@@ -179,6 +222,7 @@ const GALLERY_ITEMS: GalleryItem[] = [
   {
     id: 'ci',
     title: 'Playwright E2E & Release Pipeline',
+    category: 'Security & CI',
     desc: 'Real Chromium extension smoke tests, SSOT version verification, and automated Release Please changelogs on every push.',
     specs: ['4 Playwright Chromium E2E checks', '19 Vitest unit tests', 'SSOT version sync across 12 workspaces'],
     tags: ['Playwright', 'Vitest', 'Release Please'],
@@ -189,16 +233,16 @@ const GALLERY_ITEMS: GalleryItem[] = [
 
 const TERMINAL_LINES = [
   { delay: 0,    text: '$ pnpm install', color: 'text-cyan-300' },
-  { delay: 500,  text: '✓ 847 packages resolved', color: 'text-emerald-400' },
-  { delay: 950,  text: '$ pnpm -r run build', color: 'text-cyan-300' },
-  { delay: 1450, text: '✓ @drishti/shared-types & core packages built', color: 'text-slate-400' },
-  { delay: 1950, text: '✓ @drishti/mcp-tools (35 tools) built', color: 'text-slate-400' },
-  { delay: 2450, text: '✓ chrome-extension: 1583 modules transformed', color: 'text-emerald-400' },
-  { delay: 2950, text: '$ pnpm test', color: 'text-cyan-300' },
-  { delay: 3350, text: '✓ 19/19 unit tests passed (3 files)', color: 'text-emerald-400' },
-  { delay: 3800, text: '$ pnpm test:e2e', color: 'text-cyan-300' },
-  { delay: 4300, text: '✓ 4/4 Playwright Chromium E2E passed', color: 'text-emerald-400' },
-  { delay: 4750, text: '🚀 All checks green — v' + data.version + ' live!', color: 'text-cyan-200' },
+  { delay: 450,  text: '✓ 847 packages resolved', color: 'text-emerald-400' },
+  { delay: 900,  text: '$ pnpm -r run build', color: 'text-cyan-300' },
+  { delay: 1400, text: '✓ @drishti/shared-types & core packages built', color: 'text-slate-400' },
+  { delay: 1900, text: '✓ @drishti/mcp-tools (37 tools) built', color: 'text-slate-400' },
+  { delay: 2400, text: '✓ chrome-extension: 1583 modules transformed', color: 'text-emerald-400' },
+  { delay: 2900, text: '$ pnpm test', color: 'text-cyan-300' },
+  { delay: 3300, text: '✓ 19/19 unit tests passed (3 files)', color: 'text-emerald-400' },
+  { delay: 3750, text: '$ pnpm test:e2e', color: 'text-cyan-300' },
+  { delay: 4200, text: '✓ 4/4 Playwright Chromium E2E passed', color: 'text-emerald-400' },
+  { delay: 4650, text: '🚀 All checks green — v' + data.version + ' live!', color: 'text-cyan-200' },
 ];
 
 const COLOR_MAP: Record<string, string> = {
@@ -210,52 +254,39 @@ const COLOR_MAP: Record<string, string> = {
   sky:     'text-sky-400 bg-sky-950/60 border-sky-500/30',
 };
 
-/* ─── Gallery Mini-UI Preview Renderer ───────────────────── */
-function GalleryPreview({ id }: { id: string }) {
-  switch (id) {
-    case 'sidepanel':
-      return (
-        <div className="p-3 h-full flex flex-col justify-between text-[10px] font-mono">
-          <div className="flex items-center justify-between">
-            <span className="text-cyan-300 font-bold flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Drishti Control Deck
-            </span>
-            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              CONNECTED
-            </span>
-          </div>
-          <div className="bg-cyan-950/50 border border-cyan-500/30 rounded-lg px-2.5 py-1.5 text-cyan-200">
-            Mission dispatched to Antigravity MCP
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-400 truncate">
-              Open GitHub &amp; check CI status…
-            </div>
-            <div className="px-2 py-1.5 rounded-lg bg-cyan-600 text-white flex items-center gap-1 font-bold">
-              <Send className="w-2.5 h-2.5" />
-            </div>
-          </div>
-        </div>
-      );
+/* ─── Gallery Preview Renderer ───────────────────────────── */
+function GalleryPreview({ item }: { item: GalleryItem }) {
+  if (item.image) {
+    return (
+      <img
+        src={item.image}
+        alt={item.title}
+        loading="lazy"
+        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+      />
+    );
+  }
+
+  switch (item.id) {
     case 'bezier':
       return (
         <div className="relative h-full w-full overflow-hidden p-3">
           <svg viewBox="0 0 240 120" className="w-full h-full">
-            <path
-              d="M 24 92 C 80 18, 150 105, 206 32"
-              fill="none"
-              stroke="url(#trailGrad)"
-              strokeWidth="2.5"
-              strokeDasharray="6 4"
-            />
             <defs>
               <linearGradient id="trailGrad" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#00f2fe" stopOpacity="0.15" />
                 <stop offset="100%" stopColor="#00f2fe" stopOpacity="1" />
               </linearGradient>
             </defs>
+            <path
+              d="M 24 92 C 80 18, 150 105, 206 32"
+              fill="none"
+              stroke="url(#trailGrad)"
+              strokeWidth="2.5"
+              className="animate-packet-flow"
+            />
             <circle cx="24" cy="92" r="4" fill="#38bdf8" opacity="0.5" />
-            <circle cx="206" cy="32" r="14" fill="none" stroke="#00f2fe" strokeOpacity="0.4" strokeWidth="1.5" />
+            <circle cx="206" cy="32" r="14" fill="none" stroke="#00f2fe" strokeOpacity="0.45" strokeWidth="1.5" />
             <circle cx="206" cy="32" r="5" fill="#00f2fe" />
           </svg>
           <span className="absolute bottom-2 right-3 text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-400 text-[#050914] font-black">
@@ -309,7 +340,7 @@ function GalleryPreview({ id }: { id: string }) {
             <span className="text-amber-300 flex items-center gap-1">
               <Lock className="w-3 h-3" /> 127.0.0.1:7483
             </span>
-            <span className="text-emerald-400">TLS/Token OK</span>
+            <span className="text-emerald-400">Token OK</span>
           </div>
           <div className="bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-400 truncate">
             token: 9f8a2c…e41b (64-char SHA)
@@ -336,7 +367,7 @@ function useCounter(target: number, started: boolean) {
   useEffect(() => {
     if (!started) return;
     let start = 0;
-    const dur = 1200;
+    const dur = 1100;
     const tick = 16;
     const steps = dur / tick;
     const inc = target / steps;
@@ -381,7 +412,7 @@ function TerminalWindow() {
     });
   }, [running]);
 
-  useEffect(() => { const id = setTimeout(run, 500); return () => clearTimeout(id); }, []);
+  useEffect(() => { const id = setTimeout(run, 450); return () => clearTimeout(id); }, []);
 
   return (
     <div className="bg-[#060f1e] border border-slate-700 rounded-2xl overflow-hidden shadow-2xl shadow-black/60 neon-border">
@@ -606,12 +637,12 @@ function ChangelogSection({ changelog }: { changelog: string }) {
     return releases;
   }, [changelog]);
 
-  const CATEGORY_STYLES: Record<string, { label: string; color: string }> = {
-    'Features':      { label: 'Features', color: 'text-cyan-400' },
-    'Bug Fixes':     { label: 'Bug Fixes', color: 'text-rose-400' },
-    'Security':      { label: 'Security', color: 'text-emerald-400' },
-    'Documentation': { label: 'Docs', color: 'text-violet-400' },
-    'Maintenance':   { label: 'Maintenance', color: 'text-amber-400' },
+  const CATEGORY_STYLES: Record<string, { color: string }> = {
+    'Features':      { color: 'text-cyan-400' },
+    'Bug Fixes':     { color: 'text-rose-400' },
+    'Security':      { color: 'text-emerald-400' },
+    'Documentation': { color: 'text-violet-400' },
+    'Maintenance':   { color: 'text-amber-400' },
   };
 
   if (!sections.length) {
@@ -690,21 +721,50 @@ function ChangelogSection({ changelog }: { changelog: string }) {
 /* ─── App ────────────────────────────────────────────────── */
 export function App() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const markdownRef = useRef<HTMLDivElement>(null);
+
   const [copiedCmd, setCopiedCmd] = useState(false);
   const [activeDocId, setActiveDocId] = useState<string>(data.docs[0]?.id || '');
   const [docQuery, setDocQuery] = useState('');
   const [statsStarted, setStatsStarted] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [selectedGallery, setSelectedGallery] = useState<GalleryItem | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Gallery filter + Lightbox state
+  const [galleryCategory, setGalleryCategory] = useState<GalleryCategory>('All');
+  const [selectedGalleryIdx, setSelectedGalleryIdx] = useState<number | null>(null);
+
+  // MCP Tools Explorer state
+  const allTools = useMemo(() => data.mcpTools || [], []);
+  const toolCategories = useMemo(
+    () => ['All', ...Array.from(new Set(allTools.map(t => t.category)))],
+    [allTools],
+  );
+  const [toolCategory, setToolCategory] = useState('All');
+  const [toolQuery, setToolQuery] = useState('');
 
   const quickstartCmd =
     'git clone https://github.com/SudhirDevOps1/drishti-browser-ai.git && cd drishti-browser-ai && pnpm install && pnpm -r run build';
 
-  /* ── GSAP animations ── */
+  /* ── GSAP animations + Scroll Progress Bar ── */
   useEffect(() => {
     const ctx = gsap.context(() => {
       const mm = gsap.matchMedia();
       mm.add('(prefers-reduced-motion: no-preference)', () => {
+        if (progressRef.current) {
+          gsap.to(progressRef.current, {
+            scaleX: 1,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: document.documentElement,
+              start: 'top top',
+              end: 'bottom bottom',
+              scrub: 0.2,
+            },
+          });
+        }
+
         gsap.from('.hero-stagger', {
           y: 28, opacity: 0, duration: 0.75, stagger: 0.1, ease: 'power3.out', clearProps: 'transform,opacity',
         });
@@ -712,14 +772,7 @@ export function App() {
         gsap.utils.toArray<HTMLElement>('.bento-card').forEach((card, idx) => {
           gsap.from(card, {
             scrollTrigger: { trigger: card, start: 'top 92%', once: true },
-            y: 28, opacity: 0, duration: 0.5, delay: (idx % 3) * 0.08, ease: 'power2.out', clearProps: 'transform,opacity',
-          });
-        });
-
-        gsap.utils.toArray<HTMLElement>('.gallery-card').forEach((card, idx) => {
-          gsap.from(card, {
-            scrollTrigger: { trigger: card, start: 'top 92%', once: true },
-            scale: 0.94, opacity: 0, duration: 0.5, delay: (idx % 3) * 0.08, ease: 'back.out(1.3)', clearProps: 'transform,opacity',
+            y: 26, opacity: 0, duration: 0.5, delay: (idx % 3) * 0.08, ease: 'power2.out', clearProps: 'transform,opacity',
           });
         });
 
@@ -748,7 +801,36 @@ export function App() {
     return () => ctx.revert();
   }, []);
 
-  /* ── Docs ── */
+  /* ── Filtered Gallery & Lightbox Keyboard Navigation ── */
+  const filteredGallery = useMemo(
+    () => galleryCategory === 'All' ? GALLERY_ITEMS : GALLERY_ITEMS.filter(g => g.category === galleryCategory),
+    [galleryCategory],
+  );
+
+  const selectedGallery = selectedGalleryIdx !== null ? filteredGallery[selectedGalleryIdx] || null : null;
+
+  useEffect(() => {
+    if (selectedGalleryIdx === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedGalleryIdx(null);
+      if (e.key === 'ArrowRight') setSelectedGalleryIdx(i => (i === null ? null : (i + 1) % filteredGallery.length));
+      if (e.key === 'ArrowLeft') setSelectedGalleryIdx(i => (i === null ? null : (i - 1 + filteredGallery.length) % filteredGallery.length));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedGalleryIdx, filteredGallery.length]);
+
+  /* ── Filtered MCP Tools ── */
+  const filteredTools = useMemo(() => {
+    const q = toolQuery.trim().toLowerCase();
+    return allTools.filter(
+      t =>
+        (toolCategory === 'All' || t.category === toolCategory) &&
+        (!q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)),
+    );
+  }, [allTools, toolCategory, toolQuery]);
+
+  /* ── Docs + TOC + Code Copy Buttons ── */
   const filteredDocs = useMemo(() => {
     const q = docQuery.trim().toLowerCase();
     return (data.docs as DocEntry[]).filter(
@@ -761,10 +843,40 @@ export function App() {
     [activeDocId],
   );
 
+  const docHeadings = useMemo(() => {
+    if (!activeDoc) return [];
+    return activeDoc.content
+      .split('\n')
+      .map(l => l.match(/^##\s+(.+)/))
+      .filter((m): m is RegExpMatchArray => Boolean(m))
+      .map(m => m[1].replace(/`/g, '').trim())
+      .slice(0, 10);
+  }, [activeDoc]);
+
   const renderedMarkdown = useMemo(() => {
     if (!activeDoc) return '';
     return marked.parse(activeDoc.content, { async: false }) as string;
   }, [activeDoc]);
+
+  useEffect(() => {
+    const root = markdownRef.current;
+    if (!root) return;
+    const pres = root.querySelectorAll('pre');
+    pres.forEach(pre => {
+      if (pre.querySelector('.code-copy-btn')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy-btn';
+      btn.textContent = 'Copy';
+      btn.onclick = () => {
+        const code = pre.querySelector('code')?.textContent || pre.textContent || '';
+        navigator.clipboard.writeText(code).catch(() => {});
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+      };
+      pre.appendChild(btn);
+    });
+  }, [renderedMarkdown]);
 
   const copyCommand = () => {
     navigator.clipboard.writeText(quickstartCmd).catch(() => {});
@@ -772,11 +884,15 @@ export function App() {
     setTimeout(() => setCopiedCmd(false), 2000);
   };
 
-  /* ── Tilt on feature cards ── */
+  /* ── Spotlight + 3D Tilt on feature cards ── */
   const handleTilt = useCallback((e: React.MouseEvent<HTMLDivElement>, el: HTMLDivElement) => {
     const rect = el.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 100;
+    const py = ((e.clientY - rect.top) / rect.height) * 100;
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
+    el.style.setProperty('--mx', `${px}%`);
+    el.style.setProperty('--my', `${py}%`);
     el.style.transform = `perspective(600px) rotateY(${x * 9}deg) rotateX(${-y * 9}deg) translateZ(6px)`;
   }, []);
 
@@ -784,33 +900,46 @@ export function App() {
     el.style.transform = 'perspective(600px) rotateY(0deg) rotateX(0deg) translateZ(0px)';
   }, []);
 
+  const navItems = [
+    { href: '#gallery',      label: 'Gallery' },
+    { href: '#features',     label: 'Features' },
+    { href: '#tools',        label: `MCP Tools (${allTools.length})` },
+    { href: '#architecture', label: 'Architecture' },
+    { href: '#changelog',    label: 'Changelog' },
+    { href: '#docs',         label: `Docs (${data.docs.length})` },
+  ];
+
   return (
     <div ref={rootRef} className="min-h-screen bg-[#050914] text-slate-100 overflow-x-hidden">
+
+      {/* ── Top Scroll Progress Bar ── */}
+      <div className="fixed top-0 left-0 right-0 z-[60] h-[2px] bg-transparent pointer-events-none">
+        <div
+          ref={progressRef}
+          style={{ transform: 'scaleX(0)', transformOrigin: 'left center' }}
+          className="h-full bg-gradient-to-r from-cyan-400 via-sky-400 to-violet-500 shadow-[0_0_10px_#00f2fe]"
+        />
+      </div>
 
       {/* ── Navbar ── */}
       <header className="sticky top-0 z-50 nav-pill border-b border-slate-800/60 bg-[#050914]/85">
         <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 animate-glow-pulse">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+          <a href="#" className="flex items-center gap-2.5">
+            <img
+              src="./icons/icon.svg"
+              alt="Drishti Browser AI Icon"
+              className="w-8 h-8 rounded-xl shadow-lg shadow-cyan-500/25"
+            />
             <div>
               <span className="font-extrabold tracking-tight text-white text-sm">Drishti Browser AI</span>
               <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
                 v{data.version}
               </span>
             </div>
-          </div>
+          </a>
 
           <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-slate-400">
-            {[
-              { href: '#stats',        label: 'Stats' },
-              { href: '#gallery',      label: 'Gallery' },
-              { href: '#features',     label: 'Features' },
-              { href: '#architecture', label: 'Architecture' },
-              { href: '#changelog',    label: 'Changelog' },
-              { href: '#docs',         label: `Docs (${data.docs.length})` },
-            ].map(item => (
+            {navItems.map(item => (
               <a key={item.href} href={item.href} className="hover:text-cyan-300 transition-colors">
                 {item.label}
               </a>
@@ -825,16 +954,51 @@ export function App() {
               <span>GitHub</span>
             </a>
           </nav>
+
+          {/* Mobile Menu Toggle */}
+          <button
+            type="button"
+            aria-label="Toggle Menu"
+            onClick={() => setMobileMenuOpen(o => !o)}
+            className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-200"
+          >
+            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
+
+        {/* Mobile Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-800 bg-[#060f1e] px-5 py-4 space-y-2">
+            {navItems.map(item => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="block py-2 text-xs font-bold text-slate-300 hover:text-cyan-300"
+              >
+                {item.label}
+              </a>
+            ))}
+            <a
+              href={data.repoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-cyan-300"
+            >
+              <Github className="w-3.5 h-3.5" /> GitHub Repo
+            </a>
+          </div>
+        )}
       </header>
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden">
         <div className="hero-grid" aria-hidden />
+        <HeroCanvas />
         <div className="absolute top-16 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-36 right-1/4 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-5 pt-14 pb-18 grid lg:grid-cols-12 gap-10 items-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-5 pt-14 pb-20 grid lg:grid-cols-12 gap-10 items-center">
           <div className="lg:col-span-6 space-y-6">
             <div className="hero-stagger inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-500/40 text-xs font-bold text-cyan-300">
               <Activity className="w-3.5 h-3.5 animate-pulse" />
@@ -879,21 +1043,18 @@ export function App() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
               <a
+                href="#tools"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
+              >
+                <Wrench className="w-4 h-4 text-cyan-400" />
+                <span>{allTools.length} MCP Tools</span>
+              </a>
+              <a
                 href="#docs"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
               >
                 <BookOpen className="w-4 h-4 text-cyan-400" />
-                <span>Explore {data.docs.length} Docs</span>
-              </a>
-              <a
-                href={`${data.repoUrl}/releases`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
-              >
-                <GitBranch className="w-4 h-4 text-cyan-400" />
-                <span>Releases</span>
-                <ExternalLink className="w-3 h-3 text-slate-500" />
+                <span>Docs ({data.docs.length})</span>
               </a>
             </div>
           </div>
@@ -923,7 +1084,7 @@ export function App() {
 
       <div className="section-divider" />
 
-      {/* ── Visual Gallery (Always Visible + Interactive Modal) ── */}
+      {/* ── Visual Gallery (Real Extension Screenshots + Interactive Cards + Lightbox Carousel) ── */}
       <section id="gallery" className="max-w-7xl mx-auto px-5 py-14 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -932,27 +1093,45 @@ export function App() {
               Visual Showcase Gallery
             </h2>
             <p className="text-sm text-slate-400 mt-1">
-              Live UI previews of the Control Deck, Shadow DOM cursor, Error Telemetry, and CI checks — click any card to inspect.
+              Real Chromium extension screenshots &amp; interactive telemetry previews — click any card to open the Lightbox Carousel.
             </p>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap gap-1.5 p-1 bg-[#0b1222] border border-slate-800 rounded-xl">
+            {(['All', 'Extension UI', 'Motion & Voice', 'Security & CI'] as GalleryCategory[]).map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => { setGalleryCategory(cat); setSelectedGalleryIdx(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  galleryCategory === cat
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {GALLERY_ITEMS.map(item => (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {filteredGallery.map((item, idx) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => setSelectedGallery(item)}
-              className={`gallery-card text-left bg-gradient-to-br ${item.glow} border ${item.border} rounded-2xl p-5 space-y-3 hover:border-cyan-400/60 focus:outline-none`}
+              onClick={() => setSelectedGalleryIdx(idx)}
+              className={`gallery-card group text-left bg-gradient-to-br ${item.glow} border ${item.border} rounded-2xl p-4 space-y-3 hover:border-cyan-400/60 focus:outline-none`}
             >
-              <div className="h-36 rounded-xl bg-[#040c18] border border-slate-800/90 overflow-hidden">
-                <GalleryPreview id={item.id} />
+              <div className="h-40 rounded-xl bg-[#040c18] border border-slate-800/90 overflow-hidden">
+                <GalleryPreview item={item} />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-white">{item.title}</h3>
-                <span className="text-[10px] font-bold text-cyan-300">Inspect →</span>
+                <h3 className="text-sm font-bold text-white leading-snug">{item.title}</h3>
+                <span className="text-[10px] font-bold text-cyan-300 shrink-0">Zoom →</span>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed">{item.desc}</p>
+              <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{item.desc}</p>
               <div className="flex flex-wrap gap-1.5">
                 {item.tags.map(tag => (
                   <span key={tag} className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[10px] font-mono text-slate-300">
@@ -964,7 +1143,6 @@ export function App() {
           ))}
         </div>
 
-        {/* Interactive Bezier Cursor Playground */}
         <div className="pt-4">
           <BezierPlayground />
         </div>
@@ -976,7 +1154,7 @@ export function App() {
       <section id="features" className="max-w-7xl mx-auto px-5 py-14 space-y-8">
         <div>
           <h2 className="text-2xl font-extrabold text-white">Engineered for Real Browser Automation</h2>
-          <p className="text-sm text-slate-400 mt-1">Zero mock behavior — hover any card for 3D tilt inspection.</p>
+          <p className="text-sm text-slate-400 mt-1">Zero mock behavior — move your cursor across any card for 3D spotlight inspection.</p>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -986,8 +1164,7 @@ export function App() {
             return (
               <div
                 key={feat.title}
-                className="bento-card bg-[#0b1222] border border-slate-800/90 rounded-2xl p-5 space-y-3 cursor-default"
-                style={{ transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease' }}
+                className="bento-card spotlight-card bg-[#0b1222] border border-slate-800/90 hover:border-cyan-500/40 rounded-2xl p-5 space-y-3 cursor-default"
                 onMouseMove={e => handleTilt(e, e.currentTarget)}
                 onMouseLeave={e => resetTilt(e.currentTarget)}
               >
@@ -1014,11 +1191,72 @@ export function App() {
 
       <div className="section-divider" />
 
+      {/* ── Interactive 37 MCP Tools Explorer ── */}
+      <section id="tools" className="max-w-7xl mx-auto px-5 py-14 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-white flex items-center gap-2">
+              <Wrench className="w-6 h-6 text-cyan-400" />
+              {allTools.length} Official MCP Tools Explorer
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Parsed directly from <code className="text-cyan-300 text-xs">docs/mcp-tools-reference.md</code> — search or filter by category.
+            </p>
+          </div>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={toolQuery}
+              onChange={e => setToolQuery(e.target.value)}
+              placeholder="Search tools (e.g. click, screenshot)..."
+              className="bg-[#0b1222] border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition w-64"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {toolCategories.map(cat => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setToolCategory(cat)}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
+                toolCategory === cat
+                  ? 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300'
+                  : 'bg-[#0b1222] border-slate-800 text-slate-400 hover:border-slate-700'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[420px] overflow-y-auto pr-1">
+          {filteredTools.map(tool => (
+            <div
+              key={tool.name}
+              className="bg-[#0b1222] border border-slate-800 hover:border-cyan-500/40 rounded-xl p-4 space-y-1.5 transition"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <code className="text-xs font-mono font-bold text-cyan-300 truncate">{tool.name}</code>
+                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 shrink-0">
+                  {tool.category}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{tool.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
       {/* ── Architecture ── */}
       <section id="architecture" className="max-w-7xl mx-auto px-5 py-14 space-y-6">
         <div>
           <h2 className="text-2xl font-extrabold text-white">Monorepo Architecture</h2>
-          <p className="text-sm text-slate-400 mt-1">End-to-end typed pipeline from AI agent stdio to Chrome MV3 DOM execution.</p>
+          <p className="text-sm text-slate-400 mt-1">Animated data flow from AI agent stdio to Chrome MV3 DOM execution.</p>
         </div>
 
         <div className="bg-[#060f1e] border border-slate-800 rounded-2xl p-6">
@@ -1034,7 +1272,14 @@ export function App() {
               null,
               { label: 'Live Browser\n(Chrome · Brave)', color: 'border-rose-500/50 text-rose-300 bg-rose-950/40' },
             ].map((node, i) => {
-              if (node === null) return <div key={i} className="text-slate-600 text-lg font-bold">→</div>;
+              if (node === null) {
+                return (
+                  <svg key={i} width="28" height="14" viewBox="0 0 28 14" className="shrink-0">
+                    <line x1="2" y1="7" x2="22" y2="7" stroke="#22d3ee" strokeWidth="2" className="animate-packet-flow" />
+                    <polygon points="21,3 27,7 21,11" fill="#22d3ee" />
+                  </svg>
+                );
+              }
               return (
                 <div key={i} className={`arch-node border rounded-xl px-3.5 py-2.5 text-center whitespace-pre-line leading-tight ${node.color}`}>
                   {node.label}
@@ -1148,7 +1393,7 @@ export function App() {
               Documentation Hub
             </h2>
             <p className="text-sm text-slate-400 mt-1">
-              All {data.docs.length} repository guides — synced at build time from source markdown.
+              All {data.docs.length} repository guides — synced at build time with code-block copy &amp; Table of Contents.
             </p>
           </div>
           <div className="relative">
@@ -1185,7 +1430,7 @@ export function App() {
           <article className="lg:col-span-9 bg-[#0b1222] border border-slate-800 rounded-2xl overflow-hidden">
             {activeDoc && (
               <>
-                <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-800 bg-[#060f1e]/60">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3.5 border-b border-slate-800 bg-[#060f1e]/60">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-mono text-cyan-300">{activeDoc.file}</span>
                     <span className="text-slate-600">·</span>
@@ -1203,8 +1448,21 @@ export function App() {
                     <span>{copiedCode === activeDoc.id ? 'Copied!' : 'Copy raw'}</span>
                   </button>
                 </div>
+
+                {docHeadings.length > 0 && (
+                  <div className="px-6 py-2.5 border-b border-slate-800/70 bg-[#050c19] flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase text-slate-500 mr-1">Sections:</span>
+                    {docHeadings.map(h => (
+                      <span key={h} className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <div className="p-6 max-h-[640px] overflow-y-auto">
                   <div
+                    ref={markdownRef}
                     className="markdown-body"
                     dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
                   />
@@ -1222,9 +1480,7 @@ export function App() {
         <div className="max-w-7xl mx-auto px-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                <Sparkles className="w-3.5 h-3.5 text-white" />
-              </div>
+              <img src="./icons/icon.svg" alt="Drishti Browser AI" className="w-7 h-7 rounded-lg" />
               <div>
                 <div className="text-sm font-bold text-white">Drishti Browser AI</div>
                 <div className="text-[10px] text-slate-500">MIT License · SSOT v{data.version}</div>
@@ -1251,28 +1507,56 @@ export function App() {
         </div>
       </footer>
 
-      {/* ── Gallery Lightbox Modal ── */}
-      {selectedGallery && (
+      {/* ── Gallery Lightbox Carousel Modal ── */}
+      {selectedGallery && selectedGalleryIdx !== null && (
         <div
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setSelectedGallery(null)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedGalleryIdx(null)}
         >
           <div
-            className={`max-w-lg w-full bg-[#071022] border ${selectedGallery.border} rounded-2xl p-6 space-y-4 shadow-2xl`}
+            className={`max-w-2xl w-full bg-[#071022] border ${selectedGallery.border} rounded-2xl p-6 space-y-4 shadow-2xl`}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-white">{selectedGallery.title}</h3>
-              <button
-                onClick={() => setSelectedGallery(null)}
-                className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-cyan-400">{selectedGallery.category}</span>
+                <h3 className="text-base font-extrabold text-white">{selectedGallery.title}</h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label="Previous item"
+                  onClick={() => setSelectedGalleryIdx((selectedGalleryIdx - 1 + filteredGallery.length) % filteredGallery.length)}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-mono text-slate-400 px-1">
+                  {selectedGalleryIdx + 1}/{filteredGallery.length}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Next item"
+                  onClick={() => setSelectedGalleryIdx((selectedGalleryIdx + 1) % filteredGallery.length)}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 hover:text-white"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Close modal"
+                  onClick={() => setSelectedGalleryIdx(null)}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="h-48 rounded-xl bg-[#040c18] border border-slate-800 overflow-hidden">
-              <GalleryPreview id={selectedGallery.id} />
+
+            <div className="h-72 rounded-xl bg-[#040c18] border border-slate-800 overflow-hidden">
+              <GalleryPreview item={selectedGallery} />
             </div>
+
             <p className="text-xs text-slate-300 leading-relaxed">{selectedGallery.desc}</p>
             <ul className="space-y-1.5">
               {selectedGallery.specs.map(spec => (
