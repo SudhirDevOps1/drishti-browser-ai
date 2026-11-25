@@ -23,10 +23,17 @@ async function getAuthToken(): Promise<string> {
   });
 }
 
-async function connectToBridge(): Promise<void> {
+async function connectToBridge(force = false): Promise<void> {
+  if (!force && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+    return;
+  }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   authToken = await getAuthToken();
   if (!authToken) {
-    console.warn('[Bridge] No auth token configured. Set it in extension options.');
     scheduleReconnect();
     return;
   }
@@ -135,7 +142,7 @@ async function connectToBridge(): Promise<void> {
     };
 
     socket.onerror = () => {
-      console.warn('[Bridge] WebSocket error on ws://127.0.0.1:7483');
+      // Quietly handled by onclose + backoff reconnect when on-demand bridge is offline
     };
 
   } catch (err) {
@@ -179,8 +186,8 @@ async function testBridgeConnection(testToken?: string, testPort?: string | numb
             clearTimeout(timeout);
             const elapsed = Math.round(performance.now() - start);
             try { testWs?.close(); } catch {}
-            // Refresh background connection
-            connectToBridge();
+            // Ensure persistent background connection is active without tearing down an already-open socket
+            connectToBridge(false);
             resolve({ success: true, latency: Math.max(1, elapsed) });
           }
         } catch {}
