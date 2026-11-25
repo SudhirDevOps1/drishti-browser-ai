@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { validateAuthToken } from './auth.js';
 import { logger } from './logger.js';
+import { confirmBrowserSaveDialog, type SaveDialogOptions } from './os-dialog.js';
 
 /** Milliseconds to wait for a command response before rejecting. */
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -320,6 +321,14 @@ export class BridgeServer extends EventEmitter {
             ],
           },
         }));
+        return;
+      }
+
+      // ── Handle Bridge-level OS Save As dialog confirmation ──
+      if (isController && msg.id && msg.action === 'OS_SAVE_DIALOG') {
+        const opts = (msg.payload || {}) as SaveDialogOptions;
+        const result = await confirmBrowserSaveDialog(opts);
+        ws.send(JSON.stringify({ id: msg.id, success: true, result }));
         return;
       }
 

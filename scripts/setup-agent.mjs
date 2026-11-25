@@ -62,7 +62,7 @@ description: Autonomous Chrome/Brave browser controller via Drishti Browser AI M
 1. **Check SQLite Workflow Cache First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` before planning clicks from scratch.
 2. **Avoid Redundant Screenshots**: Use \`browser_observe()\` and \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of calling \`browser_screenshot()\` after every click.
 3. **Record New Workflows**: Wrap repeated multi-step tasks with \`workflow_start({ name, queryPattern })\` and \`workflow_stop()\`.
-4. **Safe Downloads & Destructive Gates**: Use \`browser_download()\` for silent downloads and \`browser_confirm()\` before delete/submit/payment actions.
+4. **Safe Downloads & Destructive Gates**: Use \`browser_download()\` for silent downloads, \`browser_handle_save_dialog()\` if a \`blob:\` Save As dialog appears, \`browser_wait_download()\` for large files (like Linux ISOs), and \`browser_confirm()\` before delete/submit/payment actions.
 5. **Fast Typing**: Use \`browser_fill()\` or \`browser_type()\` (instant insertion for >40 chars).
 `;
   if (!dryRun) {

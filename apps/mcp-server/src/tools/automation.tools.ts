@@ -52,6 +52,17 @@ const DownloadMediaSchema = z.object({
   subfolder: z.string().optional().describe('Optional subfolder inside Downloads (e.g. "drishti-media").'),
 });
 
+const WaitDownloadSchema = z.object({
+  downloadId: z.number().int().optional().describe('Optional Chrome download ID. Defaults to the latest download.'),
+  timeoutSeconds: z.number().int().min(1).max(1800).optional().describe('Max seconds to wait (up to 1800s for large ISOs). Default: 120.'),
+});
+
+const HandleSaveDialogSchema = z.object({
+  filename: z.string().optional().describe('Optional target filename to enter into the browser Save As dialog.'),
+  folder: z.string().optional().describe('Optional target folder path for the Save As dialog.'),
+  timeoutMs: z.number().int().min(1000).max(30000).optional().describe('Wait timeout in ms (default 8000).'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const AUTOMATION_TOOLS = [
@@ -174,6 +185,33 @@ export const AUTOMATION_TOOLS = [
       required: ['url'],
     },
   },
+  {
+    name: 'browser_wait_download',
+    description:
+      'Wait for an in-progress download (including large Linux ISOs) to finish and return final file path, size, and state.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        downloadId: { type: 'number', description: 'Optional download ID (defaults to most recent download).' },
+        timeoutSeconds: { type: 'number', description: 'Max seconds to wait (default 120, max 1800).' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'browser_handle_save_dialog',
+    description:
+      'Automatically confirm a native Chrome/Brave OS Save As dialog (e.g. for blob: downloads) without human clicking.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        filename: { type: 'string', description: 'Optional filename override.' },
+        folder: { type: 'string', description: 'Optional folder override.' },
+        timeoutMs: { type: 'number', description: 'Timeout in ms (default 8000).' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -210,6 +248,14 @@ export async function handleAutomationTool(name: string, args: unknown, bridge: 
     case 'browser_download': {
       const params = DownloadMediaSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('DOWNLOAD_MEDIA', params));
+    }
+    case 'browser_wait_download': {
+      const params = WaitDownloadSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('WAIT_DOWNLOAD', params));
+    }
+    case 'browser_handle_save_dialog': {
+      const params = HandleSaveDialogSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('OS_SAVE_DIALOG', params));
     }
     default:
       return undefined;

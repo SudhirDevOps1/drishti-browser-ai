@@ -423,6 +423,8 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'WAIT':              result = await waitCommand(payload); break;
       case 'WAIT_FOR':          result = await waitForCondition(payload); break;
       case 'DOWNLOAD_MEDIA':    result = await downloadMedia(payload); break;
+      case 'DOWNLOAD_STATUS':   result = await getDownloadStatus(payload); break;
+      case 'WAIT_DOWNLOAD':     result = await waitDownload(payload); break;
       case 'GET_PAGE_INFO':     result = await getPageInfo(payload); break;
       case 'GET_CONSOLE_LOGS':  result = await getConsoleLogs(payload); break;
       case 'BATCH_COMPARE':     result = await batchCompare(payload); break;
@@ -2003,6 +2005,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // ─── Silent Download Routing (Phase 3) ──────────────────────────────────────
 const pendingDownloadSubfolders = new Map<string, string>();
+const interceptedDownloadUrls = new Set<string>();
 
 if (chrome.downloads?.onDeterminingFilename) {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
@@ -2011,6 +2014,40 @@ if (chrome.downloads?.onDeterminingFilename) {
     const baseName = (item.filename || 'download.bin').split(/[/\\]/).pop() || 'download.bin';
     const safeSub = subfolder.replace(/[^a-zA-Z0-9_-]/g, '_');
     suggest({ filename: `${safeSub}/${baseName}`, conflictAction: 'uniquify' });
+  });
+}
+
+if (chrome.downloads?.onCreated) {
+  chrome.downloads.onCreated.addListener(async (item) => {
+    // Only intercept page-initiated http/https downloads when automation is active
+    if (item.byExtensionId === chrome.runtime.id) return;
+    const targetUrl = item.finalUrl || item.url;
+    if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) return;
+    if (interceptedDownloadUrls.has(targetUrl)) return;
+
+    const { automationEnabled, autoSilentDownloads } = await chrome.storage.local.get([
+      'automationEnabled',
+      'autoSilentDownloads',
+    ]);
+    if (automationEnabled === false || autoSilentDownloads === false) return;
+
+    interceptedDownloadUrls.add(targetUrl);
+    setTimeout(() => interceptedDownloadUrls.delete(targetUrl), 10_000);
+
+    try {
+      await chrome.downloads.cancel(item.id);
+      await chrome.downloads.erase({ id: item.id }).catch(() => {});
+      const baseName = (item.filename || '').split(/[/\\]/).pop();
+      pendingDownloadSubfolders.set(targetUrl, 'drishti-downloads');
+      await chrome.downloads.download({
+        url: targetUrl,
+        filename: baseName ? `drishti-downloads/${baseName}` : undefined,
+        saveAs: false,
+        conflictAction: 'uniquify',
+      });
+    } catch {
+      // Ignore if download already completed or canceled
+    }
   });
 }
 
@@ -2371,4 +2408,68 @@ async function downloadMedia(payload: Record<string, unknown>): Promise<unknown>
   });
 
   return completed;
+}
+
+async function getDownloadStatus(payload: Record<string, unknown>): Promise<unknown> {
+  const query: chrome.downloads.DownloadQuery = payload.downloadId
+    ? { id: Number(payload.downloadId) }
+    : { limit: 5, orderBy: ['-startTime'] };
+  const items = await chrome.downloads.search(query);
+  return items.map((item) => ({
+    id: item.id,
+    url: item.finalUrl || item.url,
+    filename: item.filename,
+    state: item.state,
+    bytesReceived: item.bytesReceived,
+    totalBytes: item.totalBytes,
+    percent: item.totalBytes > 0 ? Math.round((item.bytesReceived / item.totalBytes) * 100) : null,
+    error: item.error || undefined,
+  }));
+}
+
+async function waitDownload(payload: Record<string, unknown>): Promise<unknown> {
+  const downloadId = payload.downloadId ? Number(payload.downloadId) : undefined;
+  const timeoutMs = Math.min(Math.max(Number(payload.timeoutSeconds ?? 120) * 1000, 1000), 1800_000);
+  const started = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const timer = setInterval(async () => {
+      const items = await chrome.downloads.search(
+        downloadId ? { id: downloadId } : { limit: 1, orderBy: ['-startTime'] }
+      );
+      const item = items[0];
+      if (!item) {
+        if (Date.now() - started > 5000) {
+          clearInterval(timer);
+          reject(new Error('No active download found to wait for.'));
+        }
+        return;
+      }
+      const percent = item.totalBytes > 0 ? Math.round((item.bytesReceived / item.totalBytes) * 100) : null;
+      if (item.state === 'complete') {
+        clearInterval(timer);
+        resolve({
+          id: item.id,
+          filename: item.filename,
+          fileSize: item.fileSize || item.bytesReceived,
+          state: item.state,
+          percent: 100,
+        });
+      } else if (item.state === 'interrupted') {
+        clearInterval(timer);
+        reject(new Error(`Download interrupted: ${item.error || 'unknown'}`));
+      } else if (Date.now() - started >= timeoutMs) {
+        clearInterval(timer);
+        resolve({
+          id: item.id,
+          filename: item.filename,
+          bytesReceived: item.bytesReceived,
+          totalBytes: item.totalBytes,
+          percent,
+          state: item.state,
+          timedOut: true,
+        });
+      }
+    }, 1000);
+  });
 }
