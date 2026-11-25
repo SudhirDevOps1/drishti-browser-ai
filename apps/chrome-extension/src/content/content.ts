@@ -96,9 +96,20 @@ window.addEventListener('unhandledrejection', (e) => {
   captureLog('error', 'Unhandled Promise Rejection:', e.reason);
 });
 
-// Receive MAIN-world console/network error events from injected Drishti telemetry hook
+// Receive MAIN-world console/network error events & silent blob downloads
 window.addEventListener('message', (event) => {
-  if (event.source !== window || event.data?.source !== 'DRISHTI_DEV_TELEMETRY') return;
+  if (event.source !== window) return;
+  if (event.data?.source === 'DRISHTI_BLOB_DOWNLOAD' && event.data?.payload?.dataUrl) {
+    try {
+      chrome.runtime.sendMessage({
+        type: 'SILENT_BLOB_DOWNLOAD',
+        dataUrl: event.data.payload.dataUrl,
+        filename: event.data.payload.filename,
+      }).catch(() => {});
+    } catch {}
+    return;
+  }
+  if (event.data?.source !== 'DRISHTI_DEV_TELEMETRY') return;
   const payload = event.data.payload;
   if (!payload) return;
 

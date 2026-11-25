@@ -1035,6 +1035,56 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
   await yieldIfHumanActive();
 
+  // Arm MAIN-world blob: download interceptor for 10s so AI-triggered blob downloads bypass OS Save As dialogs
+  await chrome.scripting
+    .executeScript({
+      target: { tabId: target },
+      world: 'MAIN',
+      func: () => {
+        const w = window as unknown as { __drishtiBlobHooked?: boolean; __drishtiBlobInterceptUntil?: number };
+        w.__drishtiBlobInterceptUntil = Date.now() + 10_000;
+        if (w.__drishtiBlobHooked) return;
+        w.__drishtiBlobHooked = true;
+        const origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement, ...args: unknown[]) {
+          if (
+            (w.__drishtiBlobInterceptUntil || 0) > Date.now() &&
+            this.hasAttribute('download') &&
+            typeof this.href === 'string' &&
+            this.href.startsWith('blob:')
+          ) {
+            const blobUrl = this.href;
+            const filename = this.getAttribute('download') || 'download.bin';
+            fetch(blobUrl)
+              .then((r) => r.blob())
+              .then((blob) => {
+                if (blob.size > 45 * 1024 * 1024) {
+                  // Too large for data: URL IPC; fall back to native click
+                  origClick.apply(this, args as []);
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  if (typeof reader.result === 'string') {
+                    window.postMessage(
+                      { source: 'DRISHTI_BLOB_DOWNLOAD', payload: { dataUrl: reader.result, filename } },
+                      '*'
+                    );
+                  }
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(() => {
+                origClick.apply(this, args as []);
+              });
+            return;
+          }
+          return origClick.apply(this, args as []);
+        };
+      },
+    })
+    .catch(() => {});
+
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: async (
@@ -1277,6 +1327,56 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
   if (!target) throw new Error('No active tab');
 
   await yieldIfHumanActive();
+
+  // Arm MAIN-world blob: download interceptor for 10s so AI-triggered blob downloads bypass OS Save As dialogs
+  await chrome.scripting
+    .executeScript({
+      target: { tabId: target },
+      world: 'MAIN',
+      func: () => {
+        const w = window as unknown as { __drishtiBlobHooked?: boolean; __drishtiBlobInterceptUntil?: number };
+        w.__drishtiBlobInterceptUntil = Date.now() + 10_000;
+        if (w.__drishtiBlobHooked) return;
+        w.__drishtiBlobHooked = true;
+        const origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement, ...args: unknown[]) {
+          if (
+            (w.__drishtiBlobInterceptUntil || 0) > Date.now() &&
+            this.hasAttribute('download') &&
+            typeof this.href === 'string' &&
+            this.href.startsWith('blob:')
+          ) {
+            const blobUrl = this.href;
+            const filename = this.getAttribute('download') || 'download.bin';
+            fetch(blobUrl)
+              .then((r) => r.blob())
+              .then((blob) => {
+                if (blob.size > 45 * 1024 * 1024) {
+                  // Too large for data: URL IPC; fall back to native click
+                  origClick.apply(this, args as []);
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  if (typeof reader.result === 'string') {
+                    window.postMessage(
+                      { source: 'DRISHTI_BLOB_DOWNLOAD', payload: { dataUrl: reader.result, filename } },
+                      '*'
+                    );
+                  }
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(() => {
+                origClick.apply(this, args as []);
+              });
+            return;
+          }
+          return origClick.apply(this, args as []);
+        };
+      },
+    })
+    .catch(() => {});
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
@@ -1999,6 +2099,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     chrome.storage.session.set({ consoleLogs: [], networkErrors: [] }).then(() => {
       sendResponse({ ok: true });
     });
+    return true;
+  }
+  if (msg.type === 'SILENT_BLOB_DOWNLOAD' && typeof msg.dataUrl === 'string') {
+    const baseName = String(msg.filename || 'download.bin').split(/[/\\]/).pop() || 'download.bin';
+    const safeName = baseName.replace(/[<>:"/\\|?*]/g, '_');
+    chrome.downloads
+      .download({
+        url: msg.dataUrl,
+        filename: `drishti-downloads/${safeName}`,
+        saveAs: false,
+        conflictAction: 'uniquify',
+      })
+      .then((id) => sendResponse({ ok: true, id }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
   }
 });
