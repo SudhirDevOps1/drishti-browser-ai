@@ -222,7 +222,22 @@ Drishti does **not** run silent background auto-start scripts. Start the bridge 
 ```bash
 pnpm bridge:start
 ```
-The terminal prints your active 64-character SHA-256 token and listens on `ws://127.0.0.1:7483`. Press `Ctrl+C` anytime to stop it cleanly.
+The bridge logs `Auth token: ****xxxx (configured)` (never printing secrets in plaintext) and listens on `ws://127.0.0.1:7483`. Press `Ctrl+C` anytime to stop it cleanly.
+
+---
+
+## ⬇️ Zero-Click Autonomous Downloads & Security
+
+Drishti Browser AI supports unattended downloads (videos, images, music, PDFs, or multi-GB Linux ISOs) **without disabling your browser's download protection**:
+
+- **Keep `"Ask where to save each file before downloading"` ON** in `chrome://settings/downloads` / `brave://settings/downloads` for normal daily browsing security (prevents untrusted websites from silently dropping files).
+- **Direct `http:` / `https:` Downloads (`browser_download` & `chrome.downloads.onCreated`):**
+  - When AI automation is active, Drishti intercepts webpage-triggered `http:`/`https:` downloads and routes them via `saveAs: false` into `Downloads/drishti-downloads/` with zero OS "Save As" prompts.
+- **`blob:` / `data:` Downloads (`browser_handle_save_dialog` / `OS_SAVE_DIALOG`):**
+  - For web apps like Google Flow that generate `blob:` URLs, if the browser opens a native "Save As" dialog (`<site> wants to save`), the Local Bridge confirms **Save** automatically using scoped Windows UIAutomation (strictly restricted to `#32770` dialogs owned by `chrome.exe`, `brave.exe`, or `msedge.exe`).
+- **Large File Tracking (`browser_wait_download`):**
+  - Tracks multi-GB downloads (up to 30 minutes) until `state === "complete"` and returns the final saved path and byte size.
+- **Note:** After updating Drishti, always restart the Local Bridge (`pnpm bridge:start`) and refresh the extension in `chrome://extensions/` / `brave://extensions/` so new handlers like `OS_SAVE_DIALOG` are active.
 
 ---
 
