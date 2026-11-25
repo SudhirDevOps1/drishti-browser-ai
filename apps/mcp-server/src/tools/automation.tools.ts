@@ -10,7 +10,7 @@ function ok(result: unknown): ToolResponse {
 
 const WorkflowStepSchema = z.object({
   tool: z.string().describe('Tool name to execute in this step.'),
-  params: z.record(z.unknown()).describe('Parameters to pass to the tool.'),
+  params: z.record(z.string(), z.unknown()).describe('Parameters to pass to the tool.'),
 });
 
 const ExecuteWorkflowSchema = z.object({
