@@ -17,10 +17,10 @@ Current version: 0.1.1
 8. ✅ `packages/workflow-engine` — compiled to `dist/` (TaskQueue, TaskExecutor, WorkflowEngine)
 9. ✅ `packages/mcp-tools` — compiled to `dist/` (Tool catalog & schemas)
 10. ✅ `apps/local-bridge` — compiled to `dist/`, tested live execution (port 7483 + token validation verified)
-11. ✅ `apps/mcp-server` — compiled to `dist/`, 35 tools registered with @modelcontextprotocol/sdk & Zod validation
-12. ✅ `apps/chrome-extension` — built via Vite to `dist/` with Manifest V3, background service worker, content scripts, React 18 popup, side panel, and options page
-13. ✅ `tests/unit` — 19/19 Vitest unit tests passing
-14. ✅ `scripts/version.mjs` — verified in sync (0.1.0)
+11. ✅ `apps/mcp-server` — compiled to `dist/`, full MCP toolset + `node:sqlite` workflow/selector/memory cache & auto-reconnecting `BridgeClient`
+12. ✅ `apps/chrome-extension` — built via Vite to `dist/` with Manifest V3, `@eN` semantic refs, silent `chrome.downloads`, React 18 popup, side panel, and options page
+13. ✅ `tests/unit` — 24/24 Vitest unit tests passing
+14. ✅ `scripts/version.mjs` — verified in sync (0.1.1)
 15. ✅ Documentation suite:
     - `README.md`
     - `SECURITY.md`

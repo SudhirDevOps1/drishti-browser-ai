@@ -34,8 +34,13 @@ pnpm install
 # Compile all 10 packages & Vite extensions
 pnpm build
 
-# Run unit tests (19 passed)
+# Run unit tests (24 passed)
 pnpm test
+```
+
+For automatic multi-client MCP + `.drishti-token` + skill setup, run:
+```powershell
+pnpm setup:agent -- --client auto
 ```
 
 ---
@@ -63,7 +68,7 @@ Select either of the compiled output folders:
 2. In the top-right corner, turn **Developer mode** toggle **ON**.
 3. Click **Load unpacked** in the top-left toolbar.
 4. Select `<path-to-drishti-browser-ai>/apps/chrome-extension/dist` (or `apps\chrome-extension\dist`).
-5. The extension card **"Drishti Browser AI"** (`v0.1.0`) will appear.
+5. The extension card **"Drishti Browser AI"** (`v0.1.1`) will appear.
 6. Pin the extension to your toolbar.
 
 > [!NOTE]
@@ -81,10 +86,9 @@ node dist/index.js
 ```
 Output:
 ```
-[INFO] Starting Drishti Browser AI Bridge v0.1.0
+[INFO] Starting Drishti Browser AI Bridge v0.1.1
 [INFO] WebSocket port: 7483
-[INFO] Auth token: YOUR_64_CHARACTER_BRIDGE_TOKEN
-[INFO] WebSocket server listening on ws://localhost:7483
+[INFO] Auth token: ****xxxx (configured)
 [INFO] Bridge ready. Waiting for Chrome Extension connection...
 ```
 
@@ -93,12 +97,9 @@ Output:
 ## 5. Configure Extension Settings
 
 1. Click the extension icon in Chrome/Brave toolbar → **Settings**.
-2. Paste the 64-character token:
-   `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-3. Click **Test Bridge Ping**.
-4. You will see a green banner:
-   `Bridge connected & authenticated (10ms) — Ready for Antigravity & OpenCode!`
-5. Click **Save Changes**.
+2. Paste your 64-character token from `.drishti-token` (or click **Generate** in Settings and sync via `pnpm setup:agent -- --token <token>`).
+3. Click **Run Ping** to verify green `ONLINE` status.
+4. Click **Save Changes**.
 
 ---
 

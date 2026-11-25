@@ -244,9 +244,46 @@ Drishti Browser AI registers **37 official browser automation tools** with the M
 - **Parameters:**
   - `taskId` *(optional, string)*
 
+### `browser_wait_for`
+- **Description:** Condition-based wait for a CSS selector or visible text substring to appear (replaces fixed-duration waits).
+- **Parameters:**
+  - `selector` *(optional, string)*, `text` *(optional, string)*, `timeout` *(optional, ms)*
+
+### `browser_use_tab`
+- **Description:** Bind automation to a specific `tabId`, or pass `null` to unlock and follow the active tab.
+- **Parameters:**
+  - `tabId` *(required, number | null)*
+
+### `browser_drag`
+- **Description:** Drag and drop from `fromSelector`/`fromRef`/coordinates to `toSelector`/`toRef`/coordinates.
+
+### `browser_scroll_into_view`
+- **Description:** Smoothly scroll an element (`selector` or `@eN` `ref`) into the viewport center.
+
+### `browser_download`
+- **Description:** Silently download a URL via `chrome.downloads` (`saveAs: false`) into a dedicated subfolder without triggering an OS Save As dialog.
+- **Parameters:**
+  - `url` *(required, string)*, `filename` *(optional, string)*, `subfolder` *(optional, string)*
+
 ---
 
-## 7. Debugging & Inspection Tools
+## 7. SQLite Workflow Cache, Memory & Safety Tools
+
+### `workflow_start` / `workflow_stop` / `workflow_run` / `workflow_list` / `workflow_match`
+- **Description:** Record browser steps into local SQLite (`apps/mcp-server/src/db/schema.sql`), match repeated user queries (`workflow_match`), and replay workflows with `{{var}}` substitution (`workflow_run`).
+
+### `browser_memory`
+- **Description:** Cross-session SQLite memory (`remember` / `recall` / `forget`) with automatic PII/token filtering and optional TTL.
+
+### `browser_confirm`
+- **Description:** Destructive action safety gate (`DELETE` / `SUBMIT` / `PAYMENT`) that stores a 5-minute undo snapshot in SQLite and blocks execution until `approved: true`.
+
+### `browser_task`
+- **Description:** Plan-Execute-Verify helper that checks cached SQLite workflows first and observes the current tab without redundant screenshots.
+
+---
+
+## 8. Debugging & Inspection Tools
 
 ### `browser_console`
 - **Description:** Retrieves recent console logs (log, info, warn, error) captured from the page.

@@ -2,22 +2,20 @@
 
 Comprehensive connection instructions for every major AI coding agent and MCP application.
 
+> **1-Command Zero-Clone Setup:** Run `pnpm setup:agent -- --client auto` (or pass `--client antigravity|gemini|opencode|claude|cursor|codex`) inside the Drishti repo root to auto-generate `.drishti-token`, configure MCP, and install the `drishti-browser-agent` skill automatically.
+
 ---
 
-## 1. Antigravity (AGY)
-
-In your workspace or global Antigravity MCP settings (`mcp_config.json`):
+## 1. Google Antigravity (`~/.gemini/antigravity/mcp_config.json`)
 
 ```json
 {
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": [
-        "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
-      ],
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
       "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_TOKEN_HERE",
+        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
         "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
       }
     }
@@ -27,23 +25,17 @@ In your workspace or global Antigravity MCP settings (`mcp_config.json`):
 
 ---
 
-## 2. OpenCode
-
-Add to `~/.opencode/config.json`:
+## 2. Gemini CLI (`~/.gemini/settings.json`)
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "drishti-browser-ai": {
-        "type": "stdio",
-        "command": "node",
-        "args": [
-          "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
-        ],
-        "env": {
-          "BRIDGE_AUTH_TOKEN": "YOUR_TOKEN_HERE"
-        }
+  "mcpServers": {
+    "drishti-browser-ai": {
+      "command": "node",
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
+      "env": {
+        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
+        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
       }
     }
   }
@@ -52,26 +44,45 @@ Add to `~/.opencode/config.json`:
 
 ---
 
-## 3. Claude Code
+## 3. OpenCode (`~/.config/opencode/opencode.json`)
 
-Run directly from your terminal:
+```json
+{
+  "mcp": {
+    "drishti-browser-ai": {
+      "type": "local",
+      "command": ["node", "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
+        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
+      }
+    }
+  }
+}
+```
+
+Verify discovery with `opencode mcp list`.
+
+---
+
+## 4. Claude Code (`~/.claude/mcp.json`)
 
 ```bash
 claude mcp add drishti-browser-ai node "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
 ```
 
-Or configure via `~/.claude/mcp.json`:
+Or configure `~/.claude/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": [
-        "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
-      ],
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
       "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_TOKEN_HERE"
+        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
+        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
       }
     }
   }
@@ -80,45 +91,29 @@ Or configure via `~/.claude/mcp.json`:
 
 ---
 
-## 4. Cursor
+## 5. Cursor (`~/.cursor/mcp.json`)
 
-1. Open **Cursor Settings** (`Ctrl + ,` / `Cmd + ,`).
-2. Navigate to **Features** → **MCP**.
-3. Click **Add New MCP Server**.
-4. Configure:
-   - **Name:** `drishti-browser-ai`
-   - **Type:** `command`
-   - **Command:** `node "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"`
-   - **Environment Variables:** `BRIDGE_AUTH_TOKEN=YOUR_TOKEN_HERE`
+1. Open **Cursor Settings** (`Ctrl + ,` / `Cmd + ,`) -> **Features** -> **MCP**.
+2. Add server `drishti-browser-ai` (`command`: `node "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"`).
 
 ---
 
-## 5. Windsurf / Codeium Cascade
+## 6. OpenAI Codex (`~/.codex/config.toml`)
 
-In `~/.codeium/windsurf/mcp_config.json`:
+```toml
+[mcp_servers.drishti-browser-ai]
+command = "node"
+args = ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
 
-```json
-{
-  "mcpServers": {
-    "drishti-browser-ai": {
-      "command": "node",
-      "args": [
-        "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
-      ],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_TOKEN_HERE"
-      }
-    }
-  }
-}
+[mcp_servers.drishti-browser-ai.env]
+BRIDGE_AUTH_TOKEN = "YOUR_64_CHARACTER_BRIDGE_TOKEN"
+BRIDGE_WS_URL = "ws://127.0.0.1:7483"
 ```
 
 ---
 
-## 6. Testing with MCP Inspector
+## 7. Testing with MCP Inspector
 
-To verify tools interactively using the official Model Context Protocol Inspector:
-
-```powershell
-npx @modelcontextprotocol/inspector node "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"
+```bash
+npx @modelcontextprotocol/inspector node apps/mcp-server/dist/index.js
 ```
