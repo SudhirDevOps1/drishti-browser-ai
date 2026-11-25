@@ -86,7 +86,21 @@ export class BridgeServer extends EventEmitter {
   /** Start the WebSocket server. Resolves when the server is listening. */
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.wss = new WebSocketServer({ port: this.port });
+      this.wss = new WebSocketServer({
+        host: '127.0.0.1',
+        port: this.port,
+        maxPayload: 10 * 1024 * 1024, // 10 MB DoS guard
+        verifyClient: (info, cb) => {
+          const origin = info.origin || info.req.headers.origin;
+          // Allow Node CLI/MCP clients (no Origin) and Chrome/Brave extensions only; block CSWSH from web pages
+          if (!origin || origin.startsWith('chrome-extension://')) {
+            cb(true);
+            return;
+          }
+          logger.warn(`Blocked WebSocket connection from untrusted Origin: ${origin}`);
+          cb(false, 403, 'Forbidden Origin');
+        },
+      });
 
       this.wss.once('error', (err) => {
         logger.error(`WebSocket server error: ${err.message}`);

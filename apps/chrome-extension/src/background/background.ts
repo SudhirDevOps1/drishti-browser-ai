@@ -231,23 +231,33 @@ function scheduleReconnect(): void {
 /**
  * Enforces user-configured domain blocklist and allowlist from Options.
  */
-async function checkDomainPolicy(targetUrl?: string): Promise<void> {
+async function checkDomainPolicy(targetUrl?: string, isNavigation = false): Promise<void> {
   if (!targetUrl) return;
   let hostname = '';
   try {
     const parsed = new URL(targetUrl);
-    if (parsed.protocol === 'chrome:' || parsed.protocol === 'chrome-extension:' || parsed.protocol === 'brave:') {
+    const allowedProtocols = isNavigation
+      ? ['http:', 'https:', 'about:']
+      : ['http:', 'https:', 'about:', 'chrome:', 'chrome-extension:', 'brave:'];
+    if (!allowedProtocols.includes(parsed.protocol)) {
+      throw new Error(`Blocked unsafe URL protocol: ${parsed.protocol}`);
+    }
+    if (parsed.protocol === 'chrome:' || parsed.protocol === 'chrome-extension:' || parsed.protocol === 'brave:' || parsed.protocol === 'about:') {
       return;
     }
     hostname = parsed.hostname.toLowerCase();
-  } catch {
-    return;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.startsWith('Blocked unsafe URL')) throw err;
+    throw new Error(`Invalid or malformed URL rejected by security policy: ${targetUrl}`);
   }
 
   const { domainAllowlist, domainBlocklist } = await chrome.storage.local.get([
     'domainAllowlist',
     'domainBlocklist',
   ]);
+
+  const effectiveBlocklist =
+    domainBlocklist !== undefined ? domainBlocklist : 'bank.*, paypal.com, accounts.google.com/signin';
 
   const matchesPattern = (pattern: string, host: string, fullUrl: string) => {
     if (pattern === '*' || pattern === '*.*') return true;
@@ -256,7 +266,7 @@ async function checkDomainPolicy(targetUrl?: string): Promise<void> {
     return regex.test(host) || regex.test(fullUrl);
   };
 
-  const blockEntries = String(domainBlocklist || '')
+  const blockEntries = String(effectiveBlocklist || '')
     .split(/[\n,]/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
@@ -337,13 +347,13 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
   // Enforce domain allowlist / blocklist policy
   if (action === 'BATCH_COMPARE' && Array.isArray(payload.urls)) {
     for (const u of payload.urls) {
-      await checkDomainPolicy(String(u)).catch((err) => {
+      await checkDomainPolicy(String(u), true).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         broadcastAction(msg, 'SAFETY', 'error');
         throw err;
       });
     }
-  } else if (['NAVIGATE', 'NEW_TAB', 'CLICK', 'TYPE', 'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT'].includes(action)) {
+  } else if (['NAVIGATE', 'NEW_TAB', 'CLICK', 'TYPE', 'EXECUTE_SCRIPT', 'GET_DOM_SNAPSHOT', 'SCREENSHOT', 'GET_PAGE_INFO', 'GET_CONSOLE_LOGS'].includes(action)) {
     let urlToCheck = payload.url as string | undefined;
     if (!urlToCheck && payload.tabId) {
       try {
@@ -352,7 +362,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       } catch {}
     }
     try {
-      await checkDomainPolicy(urlToCheck);
+      await checkDomainPolicy(urlToCheck, action === 'NAVIGATE' || action === 'NEW_TAB');
     } catch (policyErr: unknown) {
       const msg = policyErr instanceof Error ? policyErr.message : String(policyErr);
       broadcastAction(msg, 'SAFETY', 'error');
@@ -882,11 +892,12 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
           }
         }
         if (!el) {
-          // Self-Healing Fuzzy Element Finder
+          // Self-Healing Fuzzy Element Finder (interactive elements prioritized over generic wrappers)
           const cleanText = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
-          const candidates = Array.from(
-            document.querySelectorAll('a, button, input, [role="button"], [role="link"], span, h1, h2, h3, h4, div')
-          ) as HTMLElement[];
+          const candidates = [
+            ...Array.from(document.querySelectorAll('a, button, input, [role="button"], [role="link"], [role="menuitem"]')),
+            ...Array.from(document.querySelectorAll('span, h1, h2, h3, h4')),
+          ] as HTMLElement[];
           for (const cand of candidates) {
             const textMatch = (cand.textContent || '').trim().toLowerCase();
             const ariaMatch = (cand.getAttribute('aria-label') || '').trim().toLowerCase();
