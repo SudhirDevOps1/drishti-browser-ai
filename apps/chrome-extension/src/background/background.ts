@@ -986,14 +986,14 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
           // Self-healing fuzzy input finder
           const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
           const inputs = Array.from(
-            document.querySelectorAll('input:not([type="hidden"]), textarea')
-          ) as (HTMLInputElement | HTMLTextAreaElement)[];
+            document.querySelectorAll('input:not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')
+          ) as HTMLElement[];
           for (const input of inputs) {
-            const p = (input.placeholder || '').toLowerCase();
-            const n = (input.name || '').toLowerCase();
+            const p = (input.getAttribute('placeholder') || '').toLowerCase();
+            const n = (input.getAttribute('name') || '').toLowerCase();
             const a = (input.getAttribute('aria-label') || '').toLowerCase();
             if (p.includes(clean) || n.includes(clean) || a.includes(clean)) {
-              el = input;
+              el = input as HTMLInputElement;
               break;
             }
           }
@@ -1013,6 +1013,17 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
 
       flashHighlight(el, '⌨️ AI TYPE');
       el.focus();
+
+      // Handle contenteditable / Slate / ProseMirror / TipTap rich-text editors
+      if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+        if (clearFirst) {
+          document.execCommand('selectAll', false);
+          document.execCommand('delete', false);
+        }
+        document.execCommand('insertText', false, text);
+        el.dispatchEvent(new InputEvent('input', { data: text, bubbles: true, inputType: 'insertText' }));
+        return { typed: text.length + ' characters (contenteditable)', selfHealed: !document.querySelector(selector || '') };
+      }
 
       const setNativeValue = (element: HTMLInputElement | HTMLTextAreaElement, val: string) => {
         const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
