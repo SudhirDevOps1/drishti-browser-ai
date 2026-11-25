@@ -268,18 +268,24 @@ Add this configuration to your AI agent's MCP settings:
 
 ---
 
-## 🧪 Quality & Verification
+## 🧪 Quality, Version SSOT & Automated Releases
 
-Every release is strictly verified under the ATLAS harness:
+Every release is strictly verified under **Husky** + **Release Please** + **Version SSOT**:
+
+- **Single Source of Truth (`package.json#version`)**: Updating the root version via `pnpm version:bump <patch|minor|major>` or `pnpm version:sync` automatically synchronizes `apps/chrome-extension/public/manifest.json`, all workspace `package.json` files, extension UI badges, `README.md`, `HANDOFF.md`, and `MEMORY.md`.
+- **Husky Git Hooks**:
+  - `commit-msg`: Enforces Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`) via `@commitlint/cli`.
+  - `pre-commit`: Runs `pnpm version:verify` and `pnpm test` before every commit.
+- **Release Please (Auto-Tag & Extension ZIP)**:
+  - Merging a Release Please PR on `main` automatically creates the `vX.Y.Z` tag, updates `CHANGELOG.md`, builds the Chrome extension, and attaches `drishti-browser-ai-extension-vX.Y.Z.zip` to GitHub Releases.
 
 ```bash
 # Run unit test assertions
 pnpm test
-# Result: 19 passed across 3 suites (1.37s)
 
 # Verify single source of truth versioning
-node scripts/version.mjs verify
-# Result: ✓ Version consistency verified (v0.1.0)
+pnpm version:verify
+# Result: OK — 0.1.0 in sync
 ```
 
 ---

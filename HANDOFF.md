@@ -1,6 +1,8 @@
-# Handoff — Sudhir Browser AI
+# Handoff — Drishti Browser AI (दृष्टि)
 
-## Session: 2026-11-24
+Current version: 0.1.0
+
+## Session: 2026-11-25
 
 ## Session Status: ALL DELIVERABLES COMPLETED & VERIFIED
 

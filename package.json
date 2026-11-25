@@ -1,8 +1,8 @@
 {
-  "name": "sudhir-browser-ai",
+  "name": "drishti-browser-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "Universal AI Browser Automation Platform — Chrome Extension + MCP Server",
+  "description": "Drishti Browser AI (दृष्टि) — Universal AI Browser Automation Platform (Chrome Extension + MCP Server)",
   "license": "MIT",
   "author": "Sudhir",
   "workspaces": [
@@ -10,6 +10,7 @@
     "packages/*"
   ],
   "scripts": {
+    "prepare": "husky",
     "build": "pnpm -r run build",
     "dev": "pnpm --parallel -r run dev",
     "test": "vitest run",
@@ -27,7 +28,10 @@
     "ext:dev": "pnpm --filter chrome-extension run dev"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
     "@types/node": "^22.0.0",
+    "husky": "^9.1.7",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.0",
     "vitest": "^2.1.8"

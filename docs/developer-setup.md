@@ -1,6 +1,18 @@
 # Developer Setup Guide — Drishti Browser AI
 
-A developer's guide to building, extending tools, running live tests, and debugging the monorepo.
+A developer's guide to building, extending tools, running live tests, managing Version SSOT, Husky hooks, and Release Please automation.
+
+---
+
+## 0. Version SSOT, Husky & Release Please
+Root `package.json#version` is the **Single Source of Truth (SSOT)**:
+```bash
+pnpm version:bump patch   # Bumps 0.1.0 -> 0.1.1 across manifest.json, all packages, UI & docs
+pnpm version:sync         # Re-syncs all derived files from package.json#version
+pnpm version:verify       # Exits 1 if any file drifted (enforced by Husky pre-commit & CI)
+```
+- **Husky**: `.husky/commit-msg` enforces Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`), and `.husky/pre-commit` runs `pnpm version:verify` + `pnpm test`.
+- **Release Please**: Pushing conventional commits to `main` opens a Release PR; merging it auto-tags `vX.Y.Z`, updates `CHANGELOG.md`, and attaches `drishti-browser-ai-extension-vX.Y.Z.zip` to GitHub Releases.
 
 ---
 

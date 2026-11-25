@@ -227,7 +227,63 @@ const targets = [
     render: (v, p, text) => {
       const next = text
         .replace(/(badge\/version-)\d+\.\d+\.\d+(?:--?(?:alpha|beta|rc)\.\d+)?/g, `$1${v}`)
-        .replace(/(\*\*Version:\*\*\s*)[0-9A-Za-z.-]+/g, `$1${v}`);
+        .replace(/(\*\*Version:\*\*\s*)[0-9A-Za-z.-]+/g, `$1${v}`)
+        .replace(/(Drishti Browser AI \(दृष्टि\) — v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?/g, `$1${v}`);
+      return next === text ? null : next;
+    },
+  },
+  {
+    name: 'chrome-manifest',
+    file: 'apps/chrome-extension/public/manifest.json',
+    render: (v, p, text) => {
+      const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${v}$2`);
+      return next === text ? null : next;
+    },
+  },
+  {
+    name: 'release-please-manifest',
+    file: '.release-please-manifest.json',
+    render: (v, p, text) => {
+      const next = text.replace(/("\."\s*:\s*")[^"]*(")/, `$1${v}$2`);
+      return next === text ? null : next;
+    },
+  },
+  ...[
+    'apps/chrome-extension/package.json',
+    'apps/local-bridge/package.json',
+    'apps/mcp-server/package.json',
+    'packages/browser-core/package.json',
+    'packages/dom-engine/package.json',
+    'packages/mcp-tools/package.json',
+    'packages/permission-engine/package.json',
+    'packages/shared-types/package.json',
+    'packages/visual-engine/package.json',
+    'packages/workflow-engine/package.json',
+  ].map((pkgFile) => ({
+    name: `workspace-${pkgFile.split('/')[1]}`,
+    file: pkgFile,
+    render: (v, p, text) => {
+      const next = text.replace(/("version"\s*:\s*")[^"]*(")/, `$1${v}$2`);
+      return next === text ? null : next;
+    },
+  })),
+  {
+    name: 'extension-popup',
+    file: 'apps/chrome-extension/src/popup/popup.tsx',
+    render: (v, p, text) => {
+      const next = text
+        .replace(/(Drishti Browser AI \(v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?( PRO\))/g, `$1${v}$2`)
+        .replace(/(>v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?(<\/span>)/g, `$1${v}$2`);
+      return next === text ? null : next;
+    },
+  },
+  {
+    name: 'extension-options',
+    file: 'apps/chrome-extension/src/options/options.tsx',
+    render: (v, p, text) => {
+      const next = text
+        .replace(/(Drishti Browser AI \(v)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?( PRO\))/g, `$1${v}$2`)
+        .replace(/(PRO V)\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?/g, `$1${v}`);
       return next === text ? null : next;
     },
   },

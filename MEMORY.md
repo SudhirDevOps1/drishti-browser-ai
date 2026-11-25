@@ -1,8 +1,8 @@
-# Project Memory — Sudhir Browser AI
+# Project Memory — Drishti Browser AI (दृष्टि)
 
 ## Project Identity
-- **Name:** sudhir-browser-ai
-- **Version:** 0.1.0
+- **Name:** drishti-browser-ai
+- **Current version:** 0.1.0
 - **Type:** Monorepo (pnpm workspaces)
 - **Purpose:** Universal AI Browser Automation Platform via MCP
 - **Target:** Windows 10/11, Chrome MV3, Node.js ≥ 20
