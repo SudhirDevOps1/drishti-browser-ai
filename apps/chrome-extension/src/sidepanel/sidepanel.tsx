@@ -104,6 +104,7 @@ export function SidePanelApp() {
   const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
   const [history, setHistory] = useState<MissionHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [dispatchBanner, setDispatchBanner] = useState<{ text: string; tone: 'info' | 'success' | 'error' } | null>(null);
   const [downloads, setDownloads] = useState<DownloadedFileItem[]>([]);
   const [showDownloads, setShowDownloads] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -193,6 +194,12 @@ export function SidePanelApp() {
         setConnected(!!msg.connected);
       }
       if (msg.type === 'BRIDGE_ACTION') {
+        if (msg.category === 'AGENT' && msg.action) {
+          setDispatchBanner({
+            text: msg.action,
+            tone: msg.status === 'error' ? 'error' : msg.status === 'success' ? 'success' : 'info',
+          });
+        }
         setLogs((prev) => [
           {
             id: String(Date.now() + Math.random()),
@@ -264,6 +271,7 @@ export function SidePanelApp() {
     if (!taskPrompt.trim() || isRunning) return;
     setIsRunning(true);
     setElapsedSeconds(0);
+    setDispatchBanner({ text: connected ? 'Sending mission to AI Agent...' : 'Running local quick mission...', tone: 'info' });
 
     const newLog: ActionLog = {
       id: String(Date.now()),
@@ -283,19 +291,24 @@ export function SidePanelApp() {
         setIsRunning(false);
         saveMissionToHistory(res && res.success !== false ? 'success' : 'failed');
         if (res?.dispatchedTo) {
+          const bannerMsg =
+            res.dispatchedTo === 'antigravity'
+              ? `Sent to Antigravity (${res.missionId}) — Check Antigravity sidebar or Live Stream below!`
+              : `Queued in MCP Inbox (${res.missionId}) — Ready for Claude/OpenCode/Cursor`;
+          setDispatchBanner({ text: bannerMsg, tone: 'success' });
+          setTaskPrompt('');
           setLogs((prev) => [
             {
               id: String(Date.now() + Math.random()),
-              action:
-                res.dispatchedTo === 'antigravity'
-                  ? `Dispatched to Antigravity (${res.missionId})`
-                  : `Queued in MCP Agent Inbox (${res.missionId}) — Ready for Claude/OpenCode/Cursor`,
+              action: bannerMsg,
               category: 'AGENT',
               timestamp: new Date().toLocaleTimeString(),
               status: 'success',
             },
             ...prev,
           ]);
+        } else if (res?.error) {
+          setDispatchBanner({ text: res.error, tone: 'error' });
         }
       }
     );
@@ -514,6 +527,23 @@ export function SidePanelApp() {
               <span>Stop</span>
             </button>
           </div>
+
+          {dispatchBanner && (
+            <div
+              className={`p-2.5 rounded-xl text-[11px] font-medium border flex items-center justify-between gap-2 animate-in fade-in duration-200 ${
+                dispatchBanner.tone === 'success'
+                  ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
+                  : dispatchBanner.tone === 'error'
+                  ? 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+                  : 'bg-cyan-950/50 border-cyan-500/40 text-cyan-300'
+              }`}
+            >
+              <span className="truncate">{dispatchBanner.text}</span>
+              <button onClick={() => setDispatchBanner(null)} className="text-slate-400 hover:text-white shrink-0">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Live Viewport Snapshot Preview Card */}
