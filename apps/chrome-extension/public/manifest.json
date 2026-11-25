@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Drishti Browser AI",
   "short_name": "Drishti AI",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal Multi-Agent Browser Automation Platform — Connect Antigravity, OpenCode, Claude Code, Cursor & Codex to your browser",
   "permissions": [
     "tabs",

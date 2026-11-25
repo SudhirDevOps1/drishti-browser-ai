@@ -1,6 +1,6 @@
 {
   "name": "drishti-browser-ai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Drishti Browser AI (दृष्टि) — Universal AI Browser Automation Platform (Chrome Extension + MCP Server)",
   "license": "MIT",
