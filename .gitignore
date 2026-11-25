@@ -1,0 +1,28 @@
+# Dependencies & Build Artifacts
+node_modules/
+**/node_modules/
+**/dist/
+extension-ready-to-install/
+.turbo/
+*.tsbuildinfo
+
+# Local Secrets & Environment
+.env
+.env.*
+.drishti-token
+**/.drishti-token
+.active-token.txt
+**/.active-token.txt
+
+# Local Scratch, Downloads & Logs
+scratch/
+downloads/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

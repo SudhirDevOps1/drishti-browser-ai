@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "paths": {
+      "@sudhir-browser-ai/shared-types": ["./packages/shared-types/src/index.ts"],
+      "@sudhir-browser-ai/browser-core": ["./packages/browser-core/src/index.ts"],
+      "@sudhir-browser-ai/dom-engine": ["./packages/dom-engine/src/index.ts"],
+      "@sudhir-browser-ai/visual-engine": ["./packages/visual-engine/src/index.ts"],
+      "@sudhir-browser-ai/permission-engine": ["./packages/permission-engine/src/index.ts"],
+      "@sudhir-browser-ai/workflow-engine": ["./packages/workflow-engine/src/index.ts"],
+      "@sudhir-browser-ai/mcp-tools": ["./packages/mcp-tools/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "**/dist", "**/build"]
+}

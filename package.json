@@ -1,0 +1,39 @@
+{
+  "name": "sudhir-browser-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal AI Browser Automation Platform — Chrome Extension + MCP Server",
+  "license": "MIT",
+  "author": "Sudhir",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm --parallel -r run dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:live": "node scripts/live-test.mjs",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r run clean && rimraf node_modules",
+    "version:bump": "node scripts/version.mjs bump",
+    "version:sync": "node scripts/version.mjs sync",
+    "version:verify": "node scripts/version.mjs verify",
+    "bridge:start": "pnpm --filter local-bridge run start",
+    "mcp:start": "pnpm --filter mcp-server run start",
+    "ext:build": "pnpm --filter chrome-extension run build",
+    "ext:dev": "pnpm --filter chrome-extension run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

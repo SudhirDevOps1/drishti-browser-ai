@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e1726"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Deep Obsidian Container -->
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="url(#bgGrad)" stroke="url(#primaryGrad)" stroke-width="4"/>
+
+  <!-- Browser Header Shelf -->
+  <rect x="18" y="18" width="92" height="18" rx="6" fill="#1e293b" opacity="0.95"/>
+  <circle cx="28" cy="27" r="3.5" fill="#f43f5e"/>
+  <circle cx="38" cy="27" r="3.5" fill="#fbbf24"/>
+  <circle cx="48" cy="27" r="3.5" fill="#34d399"/>
+  <rect x="58" y="22" width="42" height="10" rx="5" fill="#334155"/>
+
+  <!-- High-Tech AI Core Ring -->
+  <circle cx="64" cy="74" r="27" fill="none" stroke="url(#primaryGrad)" stroke-width="3.5" filter="url(#neonGlow)"/>
+
+  <!-- Diamond Prism Center -->
+  <polygon points="64,52 82,74 64,66 46,74" fill="url(#primaryGrad)"/>
+  <polygon points="64,96 82,74 64,82 46,74" fill="#38bdf8" opacity="0.9"/>
+  <circle cx="64" cy="74" r="5" fill="#ffffff" filter="url(#neonGlow)"/>
+
+  <!-- Satellite Nodes -->
+  <circle cx="28" cy="94" r="3.5" fill="#38bdf8"/>
+  <circle cx="100" cy="94" r="3.5" fill="#a855f7"/>
+  <circle cx="103" cy="54" r="3" fill="#6366f1"/>
+</svg>
