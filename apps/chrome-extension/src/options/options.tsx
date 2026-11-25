@@ -241,8 +241,8 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 
 ## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
 1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\` in known local workspaces). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
-2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client all --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\`
-   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in OpenCode/Antigravity/Claude/Cursor MCP configs, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
+2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
+   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
 3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
 
 ## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
@@ -787,8 +787,8 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 
 ## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
 1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\` in known local workspaces). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
-2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client all --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\`
-   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in OpenCode/Antigravity/Claude/Cursor MCP configs, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
+2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
+   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
 3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
 
 ## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)

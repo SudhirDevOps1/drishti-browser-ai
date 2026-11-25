@@ -152,22 +152,34 @@ graph TD
 
 ---
 
-## 🤖 1-Prompt AI Auto-Install & Setup (Zero-Clone Safe)
+## 🤖 1-Prompt AI Auto-Install & Setup (Any AI Agent — Zero-Clone Safe)
 
-Give this single prompt to **Google Antigravity**, **Claude Code**, **Cursor**, **OpenCode**, or **Codex** — it checks if Drishti is already installed (never re-cloning into unrelated projects), generates your 64-char token, registers MCP + the `drishti-browser-agent` skill automatically, and verifies `ONLINE` status:
+Give this single prompt to **Google Antigravity**, **Gemini CLI**, **OpenCode**, **Claude Code**, **Cursor**, or **OpenAI Codex** — it checks if Drishti is already installed (never re-cloning into unrelated projects), generates your 64-char token, auto-detects or targets your active AI client, installs the `drishti-browser-agent` skill, and verifies `ONLINE` status:
 
 ```xml
 <DRISHTI_AUTO_INSTALL>
-Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave browser via MCP:
+Set up Drishti Browser AI (दृष्टि) for me so you can control my Chrome/Brave browser via MCP:
 1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
-2. Inside the Drishti folder, run `pnpm setup:agent -- --client all` (`node scripts/setup-agent.mjs --client all`):
+2. Inside the Drishti folder, run `pnpm setup:agent -- --client <your_client>` (use your own client name: `antigravity`, `gemini`, `opencode`, `claude`, `cursor`, `codex`, or `auto` to auto-detect installed AI clients):
    - Auto-generates `.drishti-token` (64-char hex) if missing.
-   - Registers `drishti-browser-ai` in OpenCode (`~/.config/opencode/opencode.json`), Antigravity, Claude Code, and Cursor MCP configs.
-   - Installs `drishti-browser-agent/SKILL.md` into the agent skills folder so the skill loads automatically.
+   - Registers `drishti-browser-ai` in that AI client's MCP config.
+   - Installs `drishti-browser-agent/SKILL.md` into that client's skills directory so it loads automatically.
 3. Start the Local Bridge on-demand (`pnpm bridge:start`) — never install OS auto-start scripts.
 4. Guide me to paste the generated token in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping (or click Generate Token in Settings).
 </DRISHTI_AUTO_INSTALL>
 ```
+
+### Supported AI Clients (`pnpm setup:agent -- --client <name>`)
+
+| AI Client | Flag | MCP Config Path | Skill Path |
+|---|---|---|---|
+| **Auto-Detect Installed** | `--client auto` *(default)* | Detects all installed clients below | Auto-installed per client |
+| **Google Antigravity** | `--client antigravity` | `~/.gemini/antigravity/mcp_config.json` | `~/.gemini/config/skills/drishti-browser-agent/` |
+| **Gemini CLI** | `--client gemini` | `~/.gemini/settings.json` | `~/.gemini/skills/drishti-browser-agent/` |
+| **OpenCode** | `--client opencode` | `~/.config/opencode/opencode.json` | `~/.config/opencode/skills/drishti-browser-agent/` |
+| **Claude Code** | `--client claude` | `~/.claude/mcp.json` | `~/.claude/skills/drishti-browser-agent/` |
+| **Cursor IDE** | `--client cursor` | `~/.cursor/mcp.json` | — |
+| **OpenAI Codex** | `--client codex` | `~/.codex/config.toml` | `~/.codex/skills/drishti-browser-agent/` |
 
 ---
 

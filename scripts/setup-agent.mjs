@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
 function parseArgs(argv) {
-  const args = { client: 'all', port: '7483', token: '', dryRun: false };
+  const args = { client: 'auto', port: '7483', token: '', dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--client' && argv[i + 1]) args.client = argv[++i];
@@ -71,9 +71,34 @@ description: Autonomous Chrome/Brave browser controller via Drishti Browser AI M
   }
 }
 
+function upsertCodexToml(tomlPath, mcpEntry, token, wsUrl, dryRun) {
+  const existing = fs.existsSync(tomlPath) ? fs.readFileSync(tomlPath, 'utf8') : '';
+  const cleanEntry = mcpEntry.replace(/\\/g, '/');
+  const block = [
+    '[mcp_servers.drishti-browser-ai]',
+    'command = "node"',
+    `args = ["${cleanEntry}"]`,
+    '',
+    '[mcp_servers.drishti-browser-ai.env]',
+    `BRIDGE_AUTH_TOKEN = "${token}"`,
+    `BRIDGE_WS_URL = "${wsUrl}"`,
+    '',
+  ].join('\n');
+
+  const sectionRe = /\[mcp_servers\.drishti-browser-ai\][\s\S]*?(?=\n\[(?!mcp_servers\.drishti-browser-ai\.)|$)/;
+  const next = sectionRe.test(existing)
+    ? existing.replace(sectionRe, block.trimEnd())
+    : (existing ? existing.trimEnd() + '\n\n' : '') + block;
+
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(tomlPath), { recursive: true });
+    fs.writeFileSync(tomlPath, next, 'utf8');
+  }
+}
+
 export function runSetup(options = {}) {
   const home = options.homeDir || os.homedir();
-  const client = options.client || 'all';
+  const client = (options.client || 'auto').toLowerCase();
   const port = options.port || '7483';
   const dryRun = Boolean(options.dryRun);
   const token = ensureToken(options.token || '', dryRun);
@@ -81,10 +106,44 @@ export function runSetup(options = {}) {
   const wsUrl = `ws://127.0.0.1:${port}`;
   const configured = [];
 
-  const want = (name) => client === 'all' || client === name;
+  const want = (name, detectDir) => {
+    if (client === 'all' || client === name) return true;
+    if (client === 'auto' && detectDir) return fs.existsSync(detectDir);
+    return false;
+  };
 
-  // 1. OpenCode (~/.config/opencode/opencode.json + skill)
-  if (want('opencode')) {
+  // 1. Google Antigravity (~/.gemini/antigravity/mcp_config.json + skill)
+  if (want('antigravity', path.join(home, '.gemini', 'antigravity'))) {
+    const agyPath = path.join(home, '.gemini', 'antigravity', 'mcp_config.json');
+    const agy = readJsonSafe(agyPath);
+    agy.mcpServers = agy.mcpServers || {};
+    agy.mcpServers['drishti-browser-ai'] = {
+      command: 'node',
+      args: [mcpEntry],
+      env: { BRIDGE_AUTH_TOKEN: token, BRIDGE_WS_URL: wsUrl },
+    };
+    writeJsonSafe(agyPath, agy, dryRun);
+    installSkill(path.join(home, '.gemini', 'config', 'skills', 'drishti-browser-agent'), dryRun);
+    configured.push({ client: 'antigravity', config: agyPath });
+  }
+
+  // 2. Gemini CLI (~/.gemini/settings.json + skill)
+  if (want('gemini', path.join(home, '.gemini'))) {
+    const geminiPath = path.join(home, '.gemini', 'settings.json');
+    const gemini = readJsonSafe(geminiPath);
+    gemini.mcpServers = gemini.mcpServers || {};
+    gemini.mcpServers['drishti-browser-ai'] = {
+      command: 'node',
+      args: [mcpEntry],
+      env: { BRIDGE_AUTH_TOKEN: token, BRIDGE_WS_URL: wsUrl },
+    };
+    writeJsonSafe(geminiPath, gemini, dryRun);
+    installSkill(path.join(home, '.gemini', 'skills', 'drishti-browser-agent'), dryRun);
+    configured.push({ client: 'gemini', config: geminiPath });
+  }
+
+  // 3. OpenCode (~/.config/opencode/opencode.json + skill)
+  if (want('opencode', path.join(home, '.config', 'opencode'))) {
     const ocConfigPath = path.join(home, '.config', 'opencode', 'opencode.json');
     const ocConfig = readJsonSafe(ocConfigPath);
     ocConfig.mcp = ocConfig.mcp || {};
@@ -102,8 +161,8 @@ export function runSetup(options = {}) {
     configured.push({ client: 'opencode', config: ocConfigPath });
   }
 
-  // 2. Claude Code (~/.claude/mcp.json + skill)
-  if (want('claude')) {
+  // 4. Claude Code (~/.claude/mcp.json + skill)
+  if (want('claude', path.join(home, '.claude'))) {
     const claudePath = path.join(home, '.claude', 'mcp.json');
     const claude = readJsonSafe(claudePath);
     claude.mcpServers = claude.mcpServers || {};
@@ -117,23 +176,8 @@ export function runSetup(options = {}) {
     configured.push({ client: 'claude', config: claudePath });
   }
 
-  // 3. Antigravity (~/.gemini/antigravity/mcp_config.json + skill)
-  if (want('antigravity')) {
-    const agyPath = path.join(home, '.gemini', 'antigravity', 'mcp_config.json');
-    const agy = readJsonSafe(agyPath);
-    agy.mcpServers = agy.mcpServers || {};
-    agy.mcpServers['drishti-browser-ai'] = {
-      command: 'node',
-      args: [mcpEntry],
-      env: { BRIDGE_AUTH_TOKEN: token, BRIDGE_WS_URL: wsUrl },
-    };
-    writeJsonSafe(agyPath, agy, dryRun);
-    installSkill(path.join(home, '.gemini', 'config', 'skills', 'drishti-browser-agent'), dryRun);
-    configured.push({ client: 'antigravity', config: agyPath });
-  }
-
-  // 4. Cursor (~/.cursor/mcp.json)
-  if (want('cursor')) {
+  // 5. Cursor (~/.cursor/mcp.json)
+  if (want('cursor', path.join(home, '.cursor'))) {
     const cursorPath = path.join(home, '.cursor', 'mcp.json');
     const cursor = readJsonSafe(cursorPath);
     cursor.mcpServers = cursor.mcpServers || {};
@@ -144,6 +188,14 @@ export function runSetup(options = {}) {
     };
     writeJsonSafe(cursorPath, cursor, dryRun);
     configured.push({ client: 'cursor', config: cursorPath });
+  }
+
+  // 6. OpenAI Codex (~/.codex/config.toml + skill)
+  if (want('codex', path.join(home, '.codex'))) {
+    const codexPath = path.join(home, '.codex', 'config.toml');
+    upsertCodexToml(codexPath, mcpEntry, token, wsUrl, dryRun);
+    installSkill(path.join(home, '.codex', 'skills', 'drishti-browser-agent'), dryRun);
+    configured.push({ client: 'codex', config: codexPath });
   }
 
   return {
