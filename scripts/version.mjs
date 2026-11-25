@@ -264,6 +264,7 @@ const targets = [
     'apps/chrome-extension/package.json',
     'apps/local-bridge/package.json',
     'apps/mcp-server/package.json',
+    'apps/web-showcase/package.json',
     'packages/browser-core/package.json',
     'packages/dom-engine/package.json',
     'packages/mcp-tools/package.json',
