@@ -735,6 +735,29 @@ export function App() {
   const [galleryCategory, setGalleryCategory] = useState<GalleryCategory>('All');
   const [selectedGalleryIdx, setSelectedGalleryIdx] = useState<number | null>(null);
 
+  // Install Guide client selector + copy state
+  const [installClient, setInstallClient] = useState<'auto' | 'antigravity' | 'gemini' | 'opencode' | 'claude' | 'cursor' | 'codex'>('auto');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
+  const INSTALL_CLIENTS = [
+    { id: 'auto',        label: 'Auto-Detect',  config: 'Detects all installed AI clients',       skill: 'Auto-installed per client' },
+    { id: 'antigravity', label: 'Antigravity',  config: '~/.gemini/antigravity/mcp_config.json',  skill: '~/.gemini/config/skills/drishti-browser-agent/' },
+    { id: 'gemini',      label: 'Gemini CLI',   config: '~/.gemini/settings.json',                skill: '~/.gemini/skills/drishti-browser-agent/' },
+    { id: 'opencode',    label: 'OpenCode',     config: '~/.config/opencode/opencode.json',       skill: '~/.config/opencode/skills/drishti-browser-agent/' },
+    { id: 'claude',      label: 'Claude Code',  config: '~/.claude/mcp.json',                     skill: '~/.claude/skills/drishti-browser-agent/' },
+    { id: 'cursor',      label: 'Cursor IDE',   config: '~/.cursor/mcp.json',                     skill: 'MCP tools ready' },
+    { id: 'codex',       label: 'OpenAI Codex', config: '~/.codex/config.toml',                   skill: '~/.codex/skills/drishti-browser-agent/' },
+  ] as const;
+
+  const activeInstallClient = INSTALL_CLIENTS.find(c => c.id === installClient) || INSTALL_CLIENTS[0];
+  const autoInstallPrompt = `<DRISHTI_AUTO_INSTALL>
+Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave browser via MCP:
+1. Check if Drishti Browser AI is already installed locally (look for apps/mcp-server/dist/index.js). Only clone ${data.repoUrl}.git into a dedicated tools folder (NOT inside my current project) if missing, then run: pnpm install && pnpm -r run build
+2. Inside the Drishti folder, run: pnpm setup:agent -- --client ${installClient}
+3. Start Local Bridge on-demand: pnpm bridge:start
+4. Guide me to paste the token from .drishti-token into Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
+</DRISHTI_AUTO_INSTALL>`;
+
   // MCP Tools Explorer state
   const allTools = useMemo(() => data.mcpTools || [], []);
   const toolCategories = useMemo(
@@ -901,6 +924,7 @@ export function App() {
   }, []);
 
   const navItems = [
+    { href: '#install',      label: 'Install' },
     { href: '#gallery',      label: 'Gallery' },
     { href: '#features',     label: 'Features' },
     { href: '#tools',        label: `MCP Tools (${allTools.length})` },
@@ -1035,12 +1059,19 @@ export function App() {
 
             <div className="hero-stagger flex flex-wrap gap-3">
               <a
-                href="#gallery"
+                href="#install"
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition"
               >
-                <Eye className="w-4 h-4" />
-                <span>Visual Gallery</span>
+                <Zap className="w-4 h-4" />
+                <span>Install in 4 Steps</span>
                 <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+              <a
+                href="#gallery"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
+              >
+                <Eye className="w-4 h-4 text-cyan-400" />
+                <span>Visual Gallery</span>
               </a>
               <a
                 href="#tools"
@@ -1048,13 +1079,6 @@ export function App() {
               >
                 <Wrench className="w-4 h-4 text-cyan-400" />
                 <span>{allTools.length} MCP Tools</span>
-              </a>
-              <a
-                href="#docs"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
-              >
-                <BookOpen className="w-4 h-4 text-cyan-400" />
-                <span>Docs ({data.docs.length})</span>
               </a>
             </div>
           </div>
@@ -1079,6 +1103,133 @@ export function App() {
           {STATS.map(s => (
             <StatCard key={s.label} {...s} started={statsStarted} />
           ))}
+        </div>
+      </section>
+
+      <div className="section-divider" />
+
+      {/* ── Quick Install & Browser Setup Guide ── */}
+      <section id="install" className="max-w-7xl mx-auto px-5 py-14 space-y-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-white flex items-center gap-2">
+              <Zap className="w-6 h-6 text-cyan-400" />
+              Install &amp; Connect in 4 Easy Steps
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Works with Google Chrome &amp; Brave — choose your AI agent below for exact MCP &amp; Skill setup.
+            </p>
+          </div>
+          <a
+            href={`${data.repoUrl}/releases`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-xs font-bold text-cyan-300 hover:border-cyan-400 transition"
+          >
+            <span>Download Extension ZIP</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+
+        {/* 4 Steps Grid */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              step: '01',
+              title: 'Download or Build',
+              desc: 'Download the latest extension ZIP from GitHub Releases, or clone & build locally with pnpm install && pnpm -r run build.',
+              cmd: 'pnpm install && pnpm -r run build',
+            },
+            {
+              step: '02',
+              title: 'Load in Chrome / Brave',
+              desc: 'Open chrome://extensions/ (or brave://extensions/), turn Developer mode ON, click Load unpacked, and select apps/chrome-extension/dist.',
+              cmd: 'chrome://extensions/ → Load unpacked',
+            },
+            {
+              step: '03',
+              title: 'Zero-Clone AI Setup',
+              desc: 'Run setup:agent to auto-generate .drishti-token, register MCP, and install the drishti-browser-agent skill.',
+              cmd: `pnpm setup:agent -- --client ${installClient}`,
+            },
+            {
+              step: '04',
+              title: 'Start Bridge & Ping',
+              desc: 'Run pnpm bridge:start on-demand, paste token (or click Generate) in Extension Settings, and click Run Ping for ONLINE.',
+              cmd: 'pnpm bridge:start',
+            },
+          ].map(card => (
+            <div key={card.step} className="bg-[#0b1222] border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 space-y-3 transition">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
+                  Step {card.step}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white">{card.title}</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">{card.desc}</p>
+              <code className="block text-[10px] font-mono text-cyan-300 bg-[#060f1e] border border-slate-800 rounded-lg px-2.5 py-1.5 truncate">
+                {card.cmd}
+              </code>
+            </div>
+          ))}
+        </div>
+
+        {/* Interactive AI Client Config + 1-Prompt Copy */}
+        <div className="grid lg:grid-cols-12 gap-5 items-stretch">
+          <div className="lg:col-span-6 bg-[#0b1222] border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="text-xs font-bold text-white">Select Your AI Agent</div>
+            <div className="flex flex-wrap gap-1.5">
+              {INSTALL_CLIENTS.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setInstallClient(c.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                    installClient === c.id
+                      ? 'bg-cyan-600 border-cyan-500 text-white shadow-lg shadow-cyan-600/25'
+                      : 'bg-[#060f1e] border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <div className="bg-[#060f1e] border border-slate-800 rounded-xl p-4 space-y-2 text-xs font-mono">
+              <div className="text-slate-400">
+                Command: <span className="text-cyan-300">pnpm setup:agent -- --client {activeInstallClient.id}</span>
+              </div>
+              <div className="text-slate-400">
+                MCP Config: <span className="text-emerald-300">{activeInstallClient.config}</span>
+              </div>
+              <div className="text-slate-400">
+                Skill Path: <span className="text-violet-300">{activeInstallClient.skill}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-6 bg-[#0b1222] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white">1-Prompt AI Auto-Install (Copy &amp; Paste)</div>
+                <div className="text-[11px] text-slate-400">Paste this into {activeInstallClient.label} — zero-clone safe</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(autoInstallPrompt).catch(() => {});
+                  setCopiedPrompt(true);
+                  setTimeout(() => setCopiedPrompt(false), 2000);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition"
+              >
+                {copiedPrompt ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedPrompt ? 'Copied!' : 'Copy Prompt'}</span>
+              </button>
+            </div>
+            <pre className="bg-[#060f1e] border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-cyan-200 overflow-x-auto leading-relaxed">
+              {autoInstallPrompt}
+            </pre>
+          </div>
         </div>
       </section>
 
