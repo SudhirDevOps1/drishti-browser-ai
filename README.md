@@ -168,7 +168,7 @@ Set up Drishti Browser AI (दृष्टि) for me so you can control my Chro
    - Installs `drishti-browser-agent/SKILL.md` into that client's skills directory so it loads automatically.
 3. Start the Local Bridge on-demand (`pnpm bridge:start`) — never install OS auto-start scripts.
 4. Clean up any temporary setup files; if freshly cloned solely for runtime use (not development), remove non-runtime folders (`apps/web-showcase`, `tests`) after building.
-5. Guide me to paste the generated token in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping (or click Generate Token in Settings).
+5. **MUST print the exact 64-character auth token from `.drishti-token` clearly in your final reply to me**, then guide me to paste it in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
 </DRISHTI_AUTO_INSTALL>
 ```
 

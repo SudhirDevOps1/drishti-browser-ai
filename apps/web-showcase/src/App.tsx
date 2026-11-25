@@ -756,7 +756,7 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
 2. Inside the Drishti folder, run: pnpm setup:agent -- --client ${installClient}
 3. Start Local Bridge on-demand: pnpm bridge:start
 4. Delete any temporary setup files; if freshly cloned solely for runtime use, remove non-runtime folders (apps/web-showcase, tests) after building.
-5. Guide me to paste the token from .drishti-token into Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
+5. MUST print the exact 64-character auth token from .drishti-token clearly in your reply to me so I can paste it into Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
 </DRISHTI_AUTO_INSTALL>`;
 
   // MCP Tools Explorer state

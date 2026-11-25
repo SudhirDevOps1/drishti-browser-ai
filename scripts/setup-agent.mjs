@@ -202,6 +202,7 @@ export function runSetup(options = {}) {
     repoRoot,
     mcpEntry,
     wsUrl,
+    token,
     tokenPreview: `****${token.slice(-4)}`,
     tokenFile: path.join(repoRoot, '.drishti-token'),
     configured,
@@ -212,5 +213,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   const args = parseArgs(process.argv.slice(2));
   const summary = runSetup(args);
   console.log('[Drishti Setup] Completed zero-clone MCP & Skill registration:');
-  console.log(JSON.stringify(summary, null, 2));
+  console.log(JSON.stringify({ ...summary, token: undefined }, null, 2));
+  console.log('\n[Drishti Setup] 64-Char Auth Token (copy and paste into Chrome Extension Settings -> Connection & Bridge):');
+  console.log(summary.token);
 }
