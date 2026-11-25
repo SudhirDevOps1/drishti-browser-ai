@@ -159,7 +159,9 @@ Give this single prompt to **Google Antigravity**, **Gemini CLI**, **OpenCode**,
 ```xml
 <DRISHTI_AUTO_INSTALL>
 Set up Drishti Browser AI (दृष्टि) for me so you can control my Chrome/Brave browser via MCP:
-1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
+1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`).
+   - If found **and** `scripts/setup-agent.mjs` is missing, update it in place: `git pull origin main && pnpm install && pnpm -r run build`.
+   - Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
 2. Inside the Drishti folder, run `pnpm setup:agent -- --client <your_client>` (use your own client name: `antigravity`, `gemini`, `opencode`, `claude`, `cursor`, `codex`, or `auto` to auto-detect installed AI clients):
    - Auto-generates `.drishti-token` (64-char hex) if missing.
    - Registers `drishti-browser-ai` in that AI client's MCP config.

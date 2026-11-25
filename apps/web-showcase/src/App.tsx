@@ -752,7 +752,7 @@ export function App() {
   const activeInstallClient = INSTALL_CLIENTS.find(c => c.id === installClient) || INSTALL_CLIENTS[0];
   const autoInstallPrompt = `<DRISHTI_AUTO_INSTALL>
 Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave browser via MCP:
-1. Check if Drishti Browser AI is already installed locally (look for apps/mcp-server/dist/index.js). Only clone ${data.repoUrl}.git into a dedicated tools folder (NOT inside my current project) if missing, then run: pnpm install && pnpm -r run build
+1. Check if Drishti Browser AI is already installed locally (look for apps/mcp-server/dist/index.js). If found but scripts/setup-agent.mjs is missing, update it in place: git pull origin main && pnpm install && pnpm -r run build. Only clone ${data.repoUrl}.git into a dedicated tools folder (NOT inside my current project) if missing, then run: pnpm install && pnpm -r run build
 2. Inside the Drishti folder, run: pnpm setup:agent -- --client ${installClient}
 3. Start Local Bridge on-demand: pnpm bridge:start
 4. Guide me to paste the token from .drishti-token into Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
