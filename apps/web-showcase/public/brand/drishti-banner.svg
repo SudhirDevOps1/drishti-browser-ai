@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" fill="none">
+  <defs>
+    <linearGradient id="bn-bg" x1="0" y1="0" x2="1600" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#050914"/>
+      <stop offset="55%" stop-color="#080D1B"/>
+      <stop offset="100%" stop-color="#101A35"/>
+    </linearGradient>
+    <radialGradient id="bn-glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1240 300) rotate(90) scale(340 420)">
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bn-glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 140) rotate(90) scale(280 380)">
+      <stop offset="0%" stop-color="#625BFF" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#625BFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bn-acc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#625BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="600" fill="url(#bn-bg)"/>
+  <rect width="1600" height="600" fill="url(#bn-glow1)"/>
+  <rect width="1600" height="600" fill="url(#bn-glow2)"/>
+  <!-- Subtle grid -->
+  <path d="M0 120H1600M0 240H1600M0 360H1600M0 480H1600M200 0V600M400 0V600M600 0V600M800 0V600M1000 0V600M1200 0V600M1400 0V600" stroke="#1E293B" stroke-opacity="0.28" stroke-width="1"/>
+
+  <!-- Left Brand + Copy -->
+  <rect x="96" y="96" width="76" height="76" rx="18" fill="#0B1328" stroke="url(#bn-acc)" stroke-width="2.5"/>
+  <path d="M110 134C117 121 125 116 134 116C143 116 151 121 158 134C151 147 143 152 134 152C125 152 117 147 110 134Z" stroke="url(#bn-acc)" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="134" cy="134" r="8.5" stroke="#00E5FF" stroke-width="2.2"/>
+  <circle cx="134" cy="134" r="3.5" fill="#F4F7FF"/>
+
+  <text x="192" y="132" fill="#F4F7FF" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="32" font-weight="800" letter-spacing="1.5">DRISHTI BROWSER AI</text>
+  <text x="192" y="160" fill="#00E5FF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" letter-spacing="2.2">दृष्टि • AI BROWSER VISION &amp; HUMAN MOTION</text>
+
+  <text x="96" y="255" fill="#F4F7FF" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="48" font-weight="800">Give Your AI Agent</text>
+  <text x="96" y="315" fill="url(#bn-acc)" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="48" font-weight="800">Live Browser Vision &amp; Human Motion</text>
+
+  <text x="96" y="378" fill="#8995AE" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="22" font-weight="500">Universal AI Browser Automation • MCP • Chrome &amp; Brave</text>
+
+  <!-- Feature Pills -->
+  <rect x="96" y="426" width="166" height="40" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1.5"/>
+  <text x="179" y="451" text-anchor="middle" fill="#00E5FF" font-family="ui-monospace, monospace" font-size="14" font-weight="700">46 MCP TOOLS</text>
+
+  <rect x="278" y="426" width="192" height="40" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1.5"/>
+  <text x="374" y="451" text-anchor="middle" fill="#F4F7FF" font-family="ui-monospace, monospace" font-size="14" font-weight="700">SHADOW DOM CURSOR</text>
+
+  <rect x="486" y="426" width="184" height="40" rx="10" fill="#0F172A" stroke="#1E293B" stroke-width="1.5"/>
+  <text x="578" y="451" text-anchor="middle" fill="#A5B4FC" font-family="ui-monospace, monospace" font-size="14" font-weight="700">127.0.0.1:7483</text>
+
+  <!-- Right Abstract Browser + Vision Frame -->
+  <rect x="1020" y="108" width="484" height="384" rx="20" fill="#0A1124" stroke="#1E293B" stroke-width="2"/>
+  <rect x="1020" y="108" width="484" height="44" rx="20" fill="#0F172A"/>
+  <circle cx="1050" cy="130" r="5" fill="#F87171" fill-opacity="0.7"/>
+  <circle cx="1068" cy="130" r="5" fill="#FBBF24" fill-opacity="0.7"/>
+  <circle cx="1086" cy="130" r="5" fill="#34D399" fill-opacity="0.7"/>
+  <rect x="1116" y="120" width="260" height="20" rx="6" fill="#080D1B" stroke="#1E293B"/>
+  <text x="1132" y="134" fill="#8995AE" font-family="ui-monospace, monospace" font-size="11">https://target.app • Target Locked</text>
+
+  <!-- Highlighted target inside browser -->
+  <rect x="1070" y="198" width="230" height="62" rx="10" fill="#0F1A36" stroke="#00E5FF" stroke-width="2.5"/>
+  <rect x="1070" y="174" width="112" height="20" rx="4" fill="#00E5FF"/>
+  <text x="1126" y="188" text-anchor="middle" fill="#080D1B" font-family="ui-monospace, monospace" font-size="10" font-weight="800">CLICK · Submit</text>
+  <rect x="1090" y="218" width="140" height="20" rx="4" fill="#1E293B"/>
+
+  <!-- Bezier trail + cursor -->
+  <path d="M1390 400C1340 340 1280 280 1210 232" stroke="#00E5FF" stroke-width="2.5" stroke-dasharray="6 6" stroke-opacity="0.8"/>
+  <circle cx="1390" cy="400" r="4" fill="#625BFF"/>
+  <circle cx="1330" cy="330" r="3" fill="#00E5FF" fill-opacity="0.7"/>
+  <circle cx="1265" cy="272" r="3" fill="#00E5FF" fill-opacity="0.85"/>
+  <path d="M1206 228L1228 238L1218 242L1214 252L1206 228Z" fill="#00E5FF" stroke="#080D1B" stroke-width="1.5"/>
+
+  <!-- Mini vision eye watermark -->
+  <path d="M1320 330C1345 292 1372 276 1404 276C1436 276 1463 292 1488 330C1463 368 1436 384 1404 384C1372 384 1345 368 1320 330Z" stroke="url(#bn-acc)" stroke-width="2.5" stroke-opacity="0.45"/>
+  <circle cx="1404" cy="330" r="22" stroke="#00E5FF" stroke-width="2" stroke-opacity="0.45"/>
+</svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" fill="none">
+  <defs>
+    <linearGradient id="sp-bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#050914"/>
+      <stop offset="100%" stop-color="#101A35"/>
+    </linearGradient>
+    <linearGradient id="sp-acc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#625BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#sp-bg)"/>
+  <path d="M0 160H1280M0 320H1280M0 480H1280M320 0V640M640 0V640M960 0V640" stroke="#1E293B" stroke-opacity="0.3" stroke-width="1"/>
+  <rect x="96" y="108" width="96" height="96" rx="22" fill="#080D1B" stroke="url(#sp-acc)" stroke-width="3"/>
+  <path d="M114 156C123 139 133 132 144 132C155 132 165 139 174 156C165 173 155 180 144 180C133 180 123 173 114 156Z" stroke="url(#sp-acc)" stroke-width="3.5" stroke-linejoin="round"/>
+  <circle cx="144" cy="156" r="11" stroke="#00E5FF" stroke-width="2.5"/>
+  <circle cx="144" cy="156" r="4.5" fill="#F4F7FF"/>
+
+  <text x="220" y="148" fill="#F4F7FF" font-family="Inter, system-ui, sans-serif" font-size="40" font-weight="800" letter-spacing="1.5">DRISHTI BROWSER AI</text>
+  <text x="220" y="182" fill="#00E5FF" font-family="ui-monospace, monospace" font-size="16" font-weight="700" letter-spacing="2.2">दृष्टि • LIVE BROWSER VISION &amp; HUMAN MOTION</text>
+
+  <text x="96" y="305" fill="#F4F7FF" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="800">See the Web. Understand Every Element.</text>
+  <text x="96" y="368" fill="url(#sp-acc)" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="800">Act with Intelligence.</text>
+  <text x="96" y="432" fill="#8995AE" font-family="Inter, system-ui, sans-serif" font-size="24">Open-Source MV3 Extension + Universal MCP Gateway for Chrome &amp; Brave</text>
+
+  <rect x="96" y="486" width="210" height="46" rx="10" fill="#0F172A" stroke="#00E5FF" stroke-opacity="0.5"/>
+  <text x="201" y="515" text-anchor="middle" fill="#00E5FF" font-family="ui-monospace, monospace" font-size="16" font-weight="700">46 MCP TOOLS</text>
+  <rect x="326" y="486" width="240" height="46" rx="10" fill="#0F172A" stroke="#625BFF" stroke-opacity="0.5"/>
+  <text x="446" y="515" text-anchor="middle" fill="#C7D2FE" font-family="ui-monospace, monospace" font-size="16" font-weight="700">TRUSTED CDP INPUT</text>
+  <rect x="586" y="486" width="240" height="46" rx="10" fill="#0F172A" stroke="#1E293B"/>
+  <text x="706" y="515" text-anchor="middle" fill="#F4F7FF" font-family="ui-monospace, monospace" font-size="16" font-weight="700">GITHUB.COM/SUDHIRDEVOPS1</text>
+</svg>

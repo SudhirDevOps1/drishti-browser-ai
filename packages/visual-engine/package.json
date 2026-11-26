@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/visual-engine",
+  "name": "@drishti-browser-ai/visual-engine",
   "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",

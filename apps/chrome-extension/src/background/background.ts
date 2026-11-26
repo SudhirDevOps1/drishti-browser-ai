@@ -953,7 +953,12 @@ async function dispatchShadowCursor(
   label: string,
   rect?: { left: number; top: number; width: number; height: number },
   hudText?: string,
-  extra?: { scrollPct?: number; dragTo?: { x: number; y: number }; typingProgress?: string }
+  extra?: {
+    scrollPct?: number;
+    dragTo?: { x: number; y: number };
+    typingProgress?: string;
+    realRect?: { left: number; top: number; width: number; height: number };
+  }
 ): Promise<void> {
   const durationMs = await getCursorSpeedMs();
   const message = {
@@ -1099,61 +1104,68 @@ async function hoverElement(payload: Record<string, unknown>): Promise<ActionRes
   const hud = `HOVER · ${human}`;
   await dispatchShadowCursor(target, 'hover', coords.x, coords.y, hud, coords.rect, hud);
 
-  let usedCdpHover = false;
+  let attached = false;
+  let verified = false;
   try {
     try {
       await chrome.debugger.attach({ tabId: target }, '1.3');
+      attached = true;
+      console.debug('cdp attach/detach', target, 'attached');
     } catch (attachErr) {
-      const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
-      if (!/already attached/i.test(msg)) throw attachErr;
+      attached = false;
+      console.debug(
+        'cdp attach/detach',
+        target,
+        'attach-skipped',
+        attachErr instanceof Error ? attachErr.message : String(attachErr)
+      );
     }
-    await chrome.debugger.sendCommand({ tabId: target }, 'Input.dispatchMouseEvent', {
-      type: 'mouseMoved',
-      x: coords.x,
-      y: coords.y,
-      button: 'none',
+
+    if (attached) {
+      await chrome.debugger.sendCommand({ tabId: target }, 'Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: coords.x,
+        y: coords.y,
+        button: 'none',
+      });
+    } else {
+      await chrome.scripting
+        .executeScript({
+          target: { tabId: target },
+          func: (px: number, py: number) => {
+            const el =
+              (document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null) ||
+              (document.elementFromPoint(px, py) as HTMLElement | null);
+            if (!el) return;
+            for (const evt of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
+              const Ctor = evt.startsWith('pointer') ? PointerEvent : MouseEvent;
+              el.dispatchEvent(new Ctor(evt, { bubbles: evt !== 'mouseenter' && evt !== 'pointerenter', clientX: px, clientY: py }));
+            }
+          },
+          args: [coords.x, coords.y],
+        })
+        .catch(() => {});
+    }
+
+    await new Promise((r) => setTimeout(r, 120));
+
+    const hoverVerify = await chrome.scripting.executeScript({
+      target: { tabId: target },
+      func: () => {
+        const el = document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null;
+        if (!el) return false;
+        el.removeAttribute('data-drishti-pending-hover');
+        return el.matches(':hover') || Boolean(document.querySelector(':hover'));
+      },
     });
-    usedCdpHover = true;
-  } catch {
-    usedCdpHover = false;
+
+    verified = Boolean(hoverVerify[0]?.result);
+  } finally {
+    if (attached) {
+      await chrome.debugger.detach({ tabId: target }).catch(() => {});
+      console.debug('cdp attach/detach', target, 'detached');
+    }
   }
-
-  if (!usedCdpHover) {
-    await chrome.scripting
-      .executeScript({
-        target: { tabId: target },
-        func: (px: number, py: number) => {
-          const el =
-            (document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null) ||
-            (document.elementFromPoint(px, py) as HTMLElement | null);
-          if (!el) return;
-          for (const evt of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
-            const Ctor = evt.startsWith('pointer') ? PointerEvent : MouseEvent;
-            el.dispatchEvent(new Ctor(evt, { bubbles: evt !== 'mouseenter' && evt !== 'pointerenter', clientX: px, clientY: py }));
-          }
-        },
-        args: [coords.x, coords.y],
-      })
-      .catch(() => {});
-  }
-
-  await new Promise((r) => setTimeout(r, 120));
-
-  const hoverVerify = await chrome.scripting.executeScript({
-    target: { tabId: target },
-    func: () => {
-      const el = document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null;
-      if (!el) return false;
-      el.removeAttribute('data-drishti-pending-hover');
-      return el.matches(':hover') || Boolean(document.querySelector(':hover'));
-    },
-  });
-
-  if (usedCdpHover) {
-    await chrome.debugger.detach({ tabId: target }).catch(() => {});
-  }
-
-  const verified = Boolean(hoverVerify[0]?.result);
   if (!verified) {
     return {
       ok: false,
@@ -1346,8 +1358,17 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
         }
         const closestLabel = node.closest('label');
         if (closestLabel) {
-          const ownVal = 'value' in node ? String((node as HTMLInputElement).value || '') : '';
-          const txt = (closestLabel.textContent || '').replace(ownVal, '').replace(/\s+/g, ' ').trim();
+          const isTextLike =
+            node instanceof HTMLTextAreaElement ||
+            (node instanceof HTMLInputElement &&
+              /^(text|search|email|url|tel|number|password)$/i.test(node.type || 'text'));
+          const clone = closestLabel.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll('input, select, textarea, button').forEach((ctrl) => ctrl.remove());
+          let txt = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+          if (isTextLike && 'value' in node) {
+            const ownVal = String((node as HTMLInputElement).value || '');
+            if (ownVal) txt = txt.replace(ownVal, '').replace(/\s+/g, ' ').trim();
+          }
           if (txt) return txt;
         }
         const aria = node.getAttribute('aria-label')?.trim();
@@ -1442,7 +1463,9 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
   const humanTarget = formatHumanLabel(prep.matchedText || 'button', 28);
   const clickHud = isDoubleClick ? `DBLCLICK · ${humanTarget}` : /copy/i.test(humanTarget) ? `COPY · ${humanTarget}` : `CLICK · ${humanTarget}`;
-  await dispatchShadowCursor(target, 'click', prep.x, prep.y, clickHud, prep.visualRect, clickHud);
+  await dispatchShadowCursor(target, 'click', prep.x, prep.y, clickHud, prep.visualRect, clickHud, {
+    realRect: prep.rect,
+  });
   await new Promise((r) => setTimeout(r, 60));
 
   const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';

@@ -24,7 +24,7 @@ export const MAX_AUTO_ACTIONS = 50;
 
 export const BRIDGE_VERSION = '0.1.0';
 
-export const EXTENSION_ID_PLACEHOLDER = 'sudhir-browser-ai-extension';
+export const EXTENSION_ID_PLACEHOLDER = 'drishti-browser-ai-extension';
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/local-bridge",
+  "name": "@drishti-browser-ai/local-bridge",
   "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",

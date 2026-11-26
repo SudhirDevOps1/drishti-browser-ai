@@ -23,7 +23,7 @@ drishti-browser-ai/
 ├── apps/
 │   ├── chrome-extension/       # Manifest V3 extension (React 18 + Tailwind + Vite)
 │   │   └── dist/               # ⚠️ Load Unpacked Extension folder for Chrome/Brave
-│   ├── mcp-server/             # Official @modelcontextprotocol/sdk MCP Server (37 tools)
+│   ├── mcp-server/             # Official @modelcontextprotocol/sdk MCP Server (46 tools)
 │   └── local-bridge/           # High-speed WebSocket server on port 7483 (SHA-256 Auth)
 ├── packages/
 │   ├── shared-types/           # Shared TypeScript types, enums, constants
@@ -66,7 +66,7 @@ pnpm install
 # Build all packages & apps
 pnpm build
 
-# Run unit tests (19 passed)
+# Run unit tests (26 passed)
 pnpm test
 
 # Run End-to-End Live Browser Test
@@ -85,7 +85,7 @@ node scripts/version.mjs bump patch
 
 - **WebSocket Bridge URL:** `ws://127.0.0.1:7483`
 - **Active Auth Token:** `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-- **Total Registered Tools:** 37 MCP Tools
+- **Total Registered Tools:** 46 MCP Tools
 
 ---
 

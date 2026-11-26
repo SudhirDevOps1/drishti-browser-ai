@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/mcp-server",
+  "name": "@drishti-browser-ai/mcp-server",
   "version": "0.1.2",
   "type": "module",
   "bin": {

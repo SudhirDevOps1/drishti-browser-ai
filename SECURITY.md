@@ -45,7 +45,7 @@ Sudhir Browser AI is designed with security as a first-class concern. This docum
 
 ## Responsible Disclosure
 
-Report security vulnerabilities to: security@sudhir-browser-ai.local
+Report security vulnerabilities to: security@drishti-browser-ai.local
 
 Please do not open public GitHub issues for security vulnerabilities.
 

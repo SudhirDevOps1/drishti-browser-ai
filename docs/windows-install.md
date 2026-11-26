@@ -68,7 +68,7 @@ Select either of the compiled output folders:
 2. In the top-right corner, turn **Developer mode** toggle **ON**.
 3. Click **Load unpacked** in the top-left toolbar.
 4. Select `<path-to-drishti-browser-ai>/apps/chrome-extension/dist` (or `apps\chrome-extension\dist`).
-5. The extension card **"Drishti Browser AI"** (`v0.1.1`) will appear.
+5. The extension card **"Drishti Browser AI"** (`v0.1.2`) will appear.
 6. Pin the extension to your toolbar.
 
 > [!NOTE]
@@ -120,7 +120,7 @@ In terminal, run:
 cd "<path-to-drishti-browser-ai>"
 pnpm test:live
 ```
-Captures live telemetry, validates DOM inspection, and saves a real screenshot proof to `docs/assets/live-test-screenshot.png`.
+Captures live telemetry, validates DOM inspection, and verifies the active session.
 
 ---
 

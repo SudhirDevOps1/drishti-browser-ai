@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/workflow-engine",
+  "name": "@drishti-browser-ai/workflow-engine",
   "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",

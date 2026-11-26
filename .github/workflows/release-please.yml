@@ -70,7 +70,7 @@ jobs:
           ## 👁️ Drishti Browser AI (${TAG})
 
           > **Production Chrome/Brave MV3 Extension + Universal MCP Gateway**  
-          > Built, tested (\`19/19\` unit tests passing), and packaged automatically via GitHub Actions.
+          > Built, tested (\`28/28\` unit tests passing, \`46\` MCP tools), and packaged automatically via GitHub Actions.
 
           ---
 

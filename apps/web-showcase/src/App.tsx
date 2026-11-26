@@ -151,8 +151,8 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Control Deck Sidepanel (Real UI)',
     category: 'Extension UI',
     image: './gallery/sidepanel-control-deck.png',
-    desc: 'Actual built MV3 Sidepanel UI with two-way AI mission dispatch, EN/HI Voice toggle, 1-click macros, and live error drawer.',
-    specs: ['Captured directly from Chromium MV3 build', 'Zero-emoji lucide-react icons', 'Two-way WebSocket mission queue'],
+    desc: 'Actual built MV3 Sidepanel UI with Trusted CDP Input toggle, Cursor speed control, EN/HI Voice, 1-click macros, and live telemetry.',
+    specs: ['Captured directly from Chromium MV3 v' + data.version, 'Trusted CDP Input: ON/OFF toggle', 'Zero-emoji lucide-react icons'],
     tags: ['Real Screenshot', 'MV3 Sidepanel', 'React 18'],
     border: 'border-cyan-500/30',
     glow: 'from-cyan-500/15 to-blue-600/10',
@@ -162,8 +162,8 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Extension Popup Quick Deck (Real UI)',
     category: 'Extension UI',
     image: './gallery/popup-quick-status.png',
-    desc: 'Instant popup showing live 127.0.0.1:7483 bridge status, SSOT version badge, and quick Control Deck launch.',
-    specs: ['Captured directly from Chromium MV3 build', 'Live bridge heartbeat indicator', 'SSOT v' + data.version + ' badge'],
+    desc: 'Instant popup showing live 127.0.0.1:7483 bridge status, Locked Target Tab indicator, and SSOT version badge.',
+    specs: ['Captured directly from Chromium MV3 v' + data.version, 'Live bridge heartbeat indicator', 'SSOT v' + data.version + ' badge'],
     tags: ['Real Screenshot', 'Popup UI', 'Tailwind'],
     border: 'border-sky-500/30',
     glow: 'from-sky-500/15 to-indigo-600/10',
@@ -173,19 +173,30 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Permissions & Settings (Real UI)',
     category: 'Extension UI',
     image: './gallery/options-permissions.png',
-    desc: 'Dedicated Options page for managing domain allowlists, blocklists, automation scope, and security controls.',
-    specs: ['Captured directly from Chromium MV3 build', 'Domain allowlist & blocklist policy', 'Per-action safety configuration'],
+    desc: 'Dedicated Options page for managing Local MCP Bridge SHA-256 token auth, port 7483, domain policies, and Live Test Lab.',
+    specs: ['Captured directly from Chromium MV3 v' + data.version, '64-char SHA-256 bridge auth', 'ws://127.0.0.1:7483 transport'],
     tags: ['Real Screenshot', 'Options Page', 'Security'],
     border: 'border-emerald-500/30',
     glow: 'from-emerald-500/15 to-teal-600/10',
   },
   {
+    id: 'live-deck',
+    title: 'Live Browser + Control Deck (Real UI)',
+    category: 'Extension UI',
+    image: './gallery/live-browser-control-deck.jpg',
+    desc: 'Side-by-side live browser automation showing Drishti Control Deck docked beside the target page with Human Takeover Yield.',
+    specs: ['Real Brave/Chrome MV3 session', 'Human activity yield detection', 'Zero cookie re-authentication'],
+    tags: ['Real Screenshot', 'Live Session', 'Takeover Yield'],
+    border: 'border-indigo-500/30',
+    glow: 'from-indigo-500/15 to-blue-600/10',
+  },
+  {
     id: 'bezier',
-    title: 'Shadow DOM Bezier Cursor',
+    title: 'Shadow DOM Hover & Bezier Cursor',
     category: 'Motion & Voice',
-    desc: 'Smooth human-like cubic Bezier trajectories with fading SVG trail, target element highlight ring, and concentric click ripple.',
-    specs: ['Isolated Shadow DOM overlay', 'Fitts law easing curve', 'Auto-cleanup after idle'],
-    tags: ['Shadow DOM', 'SVG Trail', 'GSAP'],
+    desc: 'Real CDP pointer move triggers CSS :hover menus with cubic Bezier trajectory, fading SVG trail, and clean violet highlight box.',
+    specs: ['Real CDP mouseMoved + :hover verify', 'Isolated Shadow DOM overlay', 'Auto-cleanup after 3s idle'],
+    tags: ['Visual Control', 'Shadow DOM', 'Real Hover'],
     border: 'border-cyan-500/30',
     glow: 'from-cyan-500/15 to-sky-600/10',
   },
@@ -203,8 +214,8 @@ const GALLERY_ITEMS: GalleryItem[] = [
     id: 'telemetry',
     title: 'Live Console & Network Drawer',
     category: 'Security & CI',
-    desc: 'MAIN-world hooks stream uncaught errors, console.error, and 4xx/5xx fetch/XHR failures straight into the Sidepanel.',
-    specs: ['Zero DevTools required', 'Captures HTTP 4xx/5xx status', 'One-click Send Error to AI'],
+    desc: 'Clean single red error banner on failed actions with automatic 2s teardown, plus MAIN-world console & network error capture.',
+    specs: ['Single auto-clearing error box', 'Zero DevTools required', '4xx/5xx fetch/XHR telemetry'],
     tags: ['MAIN-world', 'Fetch/XHR', 'Telemetry'],
     border: 'border-rose-500/30',
     glow: 'from-rose-500/15 to-pink-600/10',
@@ -213,7 +224,7 @@ const GALLERY_ITEMS: GalleryItem[] = [
     id: 'security',
     title: '127.0.0.1 Token Auth & MV3 Guard',
     category: 'Security & CI',
-    desc: '64-character timing-safe session token, strict origin allowlist, protocol enforcement, and zero eval() sinks.',
+    desc: '64-character timing-safe session token, strict origin allowlist, resilient WebSocket bridge, and zero eval() sinks.',
     specs: ['Localhost-only ws://127.0.0.1:7483', 'Zod v4 strict schema validation', 'Automated security sink scan'],
     tags: ['Zod v4', '127.0.0.1', 'Zero eval()'],
     border: 'border-amber-500/30',
@@ -223,9 +234,9 @@ const GALLERY_ITEMS: GalleryItem[] = [
     id: 'ci',
     title: 'Playwright E2E & Release Pipeline',
     category: 'Security & CI',
-    desc: 'Real Chromium extension smoke tests, SSOT version verification, and automated Release Please changelogs on every push.',
-    specs: ['4 Playwright Chromium E2E checks', '19 Vitest unit tests', 'SSOT version sync across 12 workspaces'],
-    tags: ['Playwright', 'Vitest', 'Release Please'],
+    desc: 'Real Chromium extension smoke tests, strict tsc --noEmit gate, SSOT version verification, and automated Release Please.',
+    specs: ['4 Playwright Chromium E2E checks', '28 Vitest unit tests', 'SSOT version sync across 12 workspaces'],
+    tags: ['Playwright', 'Vitest', 'Typecheck Gate'],
     border: 'border-emerald-500/30',
     glow: 'from-emerald-500/15 to-teal-600/10',
   },
@@ -236,10 +247,10 @@ const TERMINAL_LINES = [
   { delay: 450,  text: '✓ 847 packages resolved', color: 'text-emerald-400' },
   { delay: 900,  text: '$ pnpm -r run build', color: 'text-cyan-300' },
   { delay: 1400, text: '✓ @drishti/shared-types & core packages built', color: 'text-slate-400' },
-  { delay: 1900, text: '✓ @drishti/mcp-tools (37 tools) built', color: 'text-slate-400' },
-  { delay: 2400, text: '✓ chrome-extension: 1583 modules transformed', color: 'text-emerald-400' },
+  { delay: 1900, text: '✓ @drishti/mcp-tools (46 tools) built', color: 'text-slate-400' },
+  { delay: 2400, text: '✓ chrome-extension: tsc --noEmit + vite build', color: 'text-emerald-400' },
   { delay: 2900, text: '$ pnpm test', color: 'text-cyan-300' },
-  { delay: 3300, text: '✓ 19/19 unit tests passed (3 files)', color: 'text-emerald-400' },
+  { delay: 3300, text: '✓ 26/26 unit tests passed (6 files)', color: 'text-emerald-400' },
   { delay: 3750, text: '$ pnpm test:e2e', color: 'text-cyan-300' },
   { delay: 4200, text: '✓ 4/4 Playwright Chromium E2E passed', color: 'text-emerald-400' },
   { delay: 4650, text: '🚀 All checks green — v' + data.version + ' live!', color: 'text-cyan-200' },
@@ -262,7 +273,7 @@ function GalleryPreview({ item }: { item: GalleryItem }) {
         src={item.image}
         alt={item.title}
         loading="lazy"
-        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+        className="w-full h-full object-cover object-top outline outline-1 -outline-offset-1 outline-white/10 transition-transform duration-500 group-hover:scale-105"
       />
     );
   }
@@ -951,7 +962,7 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
         <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
           <a href="#" className="flex items-center gap-2.5">
             <img
-              src="./icons/icon.svg"
+              src="./brand/drishti-icon.svg"
               alt="Drishti Browser AI Icon"
               className="w-8 h-8 rounded-xl shadow-lg shadow-cyan-500/25"
             />

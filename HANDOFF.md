@@ -19,8 +19,8 @@ Current version: 0.1.2
 10. ✅ `apps/local-bridge` — compiled to `dist/`, tested live execution (port 7483 + token validation verified)
 11. ✅ `apps/mcp-server` — compiled to `dist/`, full MCP toolset + `node:sqlite` workflow/selector/memory cache & auto-reconnecting `BridgeClient`
 12. ✅ `apps/chrome-extension` — built via Vite to `dist/` with Manifest V3, `@eN` semantic refs, silent `chrome.downloads`, React 18 popup, side panel, and options page
-13. ✅ `tests/unit` — 24/24 Vitest unit tests passing
-14. ✅ `scripts/version.mjs` — verified in sync (0.1.1)
+13. ✅ `tests/unit` — 26/26 Vitest unit tests passing
+14. ✅ `scripts/version.mjs` — verified in sync (0.1.2)
 15. ✅ Documentation suite:
     - `README.md`
     - `SECURITY.md`
@@ -34,7 +34,7 @@ Current version: 0.1.2
 
 ### Next Agent: Continue From Here
 1. Run `pnpm install && pnpm version:verify && pnpm -r run build`
-2. Run `pnpm test` (`19` Vitest unit tests) and `pnpm test:e2e` (Playwright Chromium E2E)
+2. Run `pnpm test` (`26` Vitest unit tests) and `pnpm test:e2e` (Playwright Chromium E2E)
 3. To start the Local Bridge on demand: set `BRIDGE_AUTH_TOKEN` from `.drishti-token` and run `pnpm bridge:start`
 4. Load `apps/chrome-extension/dist` in `chrome://extensions` (Developer mode)
 5. See `AGENTS.md`, `TASKS.md`, and `docs/PROJECT-STATUS.md` for current rules and status.

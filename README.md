@@ -1,162 +1,154 @@
-# 👁️ Drishti Browser AI (दृष्टि) — v0.1.2 PRO
-### Universal AI Browser Automation Platform & Control Deck for Google Chrome & Brave via Model Context Protocol (MCP)
+<p align="center">
+  <img src="apps/web-showcase/public/brand/drishti-banner.svg" alt="Drishti Browser AI — Give Your AI Agent Live Browser Vision & Human Motion" width="100%" />
+</p>
 
-[![MCP Protocol](https://img.shields.io/badge/MCP-v2024--11--05-blue?style=flat-square&logo=anthropic)](https://modelcontextprotocol.io)
-[![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-green?style=flat-square&logo=googlechrome)](https://developer.chrome.com/docs/extensions/mv3/intro/)
-[![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict_v5.7-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![Vitest](https://img.shields.io/badge/Tests-100%25_Passing-brightgreen?style=flat-square&logo=vitest)](https://vitest.dev/)
-[![Zero Emojis](https://img.shields.io/badge/UI-Vector_Lucide_Only-indigo?style=flat-square)](https://lucide.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
+<p align="center">
+  <img src="apps/web-showcase/public/brand/drishti-logo-dark.svg" alt="Drishti Browser AI Logo" width="280" />
+</p>
+
+<h1 align="center">Drishti Browser AI (दृष्टि) — v0.1.2</h1>
+
+<p align="center">
+  <strong>AI Browser Vision &amp; Human Motion Platform for Google Chrome &amp; Brave via Model Context Protocol (MCP)</strong><br />
+  <em>"Give Your AI Agent Live Browser Vision &amp; Human Motion."</em> — <em>"See the Web. Understand Every Element. Act with Intelligence."</em>
+</p>
+
+<p align="center">
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-v2024--11--05-00E5FF?style=flat-square" alt="MCP Protocol" /></a>
+  <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Chrome%20%26%20Brave-Manifest_V3-625BFF?style=flat-square" alt="Chrome MV3" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Strict_v5.7-3178C6?style=flat-square" alt="TypeScript Strict" /></a>
+  <a href="https://vitest.dev/"><img src="https://img.shields.io/badge/Vitest-28%2F28_Passing-10B981?style=flat-square" alt="Vitest" /></a>
+  <a href="https://playwright.dev/"><img src="https://img.shields.io/badge/Playwright_E2E-4%2F4_Passing-10B981?style=flat-square" alt="Playwright E2E" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-625BFF?style=flat-square" alt="MIT License" /></a>
+</p>
+
+<p align="center">
+  <a href="https://sudhirdevops1.github.io/drishti-browser-ai/">Live Website</a> •
+  <a href="#installation--setup">Installation</a> •
+  <a href="#mcp-tools-catalog-55-tools">55 MCP Tools</a> •
+  <a href="#security--privacy-architecture">Security</a> •
+  <a href="docs/windows-install.md">Windows Guide</a> •
+  <a href="docs/troubleshooting.md">Troubleshooting</a>
+</p>
 
 ---
 
-## 🌟 Live Status & UI Showcase
+## Introduction
 
-**Drishti Browser AI** connects autonomous AI agents (**Google Antigravity**, **OpenCode**, **Claude Code**, **Cursor**, **Codex**) directly to your real, daily Google Chrome or Brave browser sessions with zero cookie re-authentication, full target-tab locking, glowing visual element indicators, and transparent telemetry.
+**Drishti Browser AI** connects autonomous AI coding agents (**Google Antigravity**, **OpenCode**, **Claude Code**, **Cursor**, **OpenAI Codex**) directly to your real, daily **Google Chrome** or **Brave** browser session over an on-demand, token-authenticated localhost WebSocket bridge (`ws://127.0.0.1:7483`).
 
-| Drishti Control Deck (Target Tab Locked & Streaming) | Extension Gateway (`MCP ONLINE`) |
-|:---:|:---:|
-| ![Drishti Control Deck](docs/assets/sidepanel-locked-target-live.png) | ![Drishti Gateway Popup](docs/assets/popup-locked-target-live.png) |
-
-| Interactive Live AI Test Lab | Real-World Autonomous Tab Automation |
-|:---:|:---:|
-| ![Interactive Live AI Test Lab](docs/assets/options-live-diagnostics.jpg) | ![Autonomous Tab Automation](docs/assets/dsa-pdf-browser-proof.png) |
-
-```
-Verified Live Telemetry:
-Bridge: CONNECTED | Port: 7483 | Tabs: 2 | Latency: 4ms
-Locked Target Tab: Data Structures Full Notes.pdf
-Visual Element Indicator: Active (Glowing Cyan Bounding Box)
-Scope: AUTO | Mode: Mode A (Daily Chrome Session Preserved)
-```
+Unlike headless browser scrapers that lose your logged-in sessions or operate invisibly, Drishti runs inside your live browser profile with:
+- **Target Tab Locking** to bind automation to a single chosen tab.
+- **Shadow DOM Visual Control Overlay** (`36x36` cubic Bezier cursor, fading SVG trail, collision-free action badges, click ripples, drag trajectories, scroll progress bar, and live typing counters).
+- **Trusted CDP Input** (`chrome.debugger` mouse & keyboard events) with automatic fallback and DevTools protection.
+- **On-Demand Localhost Bridge** with 64-character SHA-256 token authentication and zero background OS auto-start persistence.
 
 ---
 
-## 📐 Architecture & System Topology
+## Actual Application Screenshots (`v0.1.2`)
 
-The platform coordinates **3 autonomous layers** over a zero-latency, SHA-256 authenticated local transport:
+| Drishti Control Deck (`v0.1.2` Sidepanel) | Extension Gateway (`MCP ONLINE`) |
+|:---:|:---:|
+| ![Drishti Control Deck](apps/web-showcase/public/gallery/sidepanel-control-deck.png) | ![Drishti Gateway Popup](apps/web-showcase/public/gallery/popup-quick-status.png) |
+
+| Local MCP Bridge Settings (`127.0.0.1:7483`) | Live Browser + Control Deck Session |
+|:---:|:---:|
+| ![Local MCP Bridge Settings](apps/web-showcase/public/gallery/options-permissions.png) | ![Live Browser + Control Deck](apps/web-showcase/public/gallery/live-browser-control-deck.jpg) |
+
+---
+
+## Key Capabilities & Feature Status
+
+| Capability | Status | Details |
+|---|---|---|
+| **Target Tab Locking** | Implemented | Lock any tab via the crosshair control; all MCP actions target that tab without interrupting your other tabs. |
+| **Shadow DOM Visual Overlay** | Implemented | Isolated `#drishti-visual-overlay` with `36x36` Bezier cursor, collision-aware badges, click ripple, drag line, scroll track, and 3s auto-cleanup. |
+| **Trusted CDP Input** | Implemented | Real `Input.dispatchMouseEvent` via `chrome.debugger` (with DevTools `already attached` guard) and DOM fallback. |
+| **Self-Healing Selectors & SQLite Cache** | Implemented | Fuzzy matching (`label[for]`, `aria-label`, `placeholder`, `:has-text`) + `node:sqlite` learned-selector persistence. |
+| **Silent & OS-Assisted Downloads** | Implemented | `chrome.downloads` `saveAs: false` routing to `drishti-downloads/` + optional `scripts/auto_save.py` Win32 `#32770` confirmer. |
+| **Live Console & Network Telemetry** | Implemented | MAIN-world hooks stream `console.error` and `4xx`/`5xx` `fetch`/`XHR` failures to the Sidepanel drawer. |
+| **Bilingual Voice Commands (`EN`/`HI`)** | Experimental | Web Speech API (`en-IN` / `hi-IN`) voice input and repeatable 1-click macro chips in `chrome.storage.local`. |
+
+---
+
+## Supported AI Clients & Browsers
+
+- **AI Clients:** Google Antigravity (`drishti-browser-agent` skill), OpenCode, Claude Code, Cursor, OpenAI Codex (via `@drishti-browser-ai/mcp-server` stdio JSON-RPC).
+- **Browsers:** Google Chrome and Brave Browser (Chromium Manifest V3).
+
+---
+
+## System Architecture
 
 ```mermaid
 graph TD
-  subgraph AI_CLIENTS ["Autonomous AI Agents (Universal Multi-IDE)"]
-    AG["Google Antigravity\n(drishti-browser-agent skill)"]
-    OC["OpenCode Agent\n(Direct MCP)"]
-    CC["Claude Code\n(~/.claude/mcp.json)"]
-    CR["Cursor / Windsurf\n(Settings > MCP)"]
-    CD["OpenAI Codex / Hermes\n(Universal stdio / WS)"]
+  subgraph AI_CLIENTS ["AI Clients (MCP Stdio)"]
+    AG["Google Antigravity"]
+    OC["OpenCode"]
+    CC["Claude Code"]
+    CR["Cursor"]
+    CD["OpenAI Codex"]
   end
 
-  subgraph MCP_GATEWAY ["Drishti Gateway Layer (apps/mcp-server)"]
-    CLI["scripts/drishti-exec.mjs\n(Zero-scratch-script runner)"]
-    MS["MCP Stdio Server (37 Tools)\n@modelcontextprotocol/sdk + Zod"]
-    BC["Bridge Client (JSON-RPC)"]
+  subgraph MCP_GATEWAY ["MCP Server (apps/mcp-server)"]
+    MS["55 MCP Tools (@modelcontextprotocol/sdk + Zod)"]
+    SQL["node:sqlite Memory & Selector Cache"]
+    CLI["scripts/drishti-exec.mjs"]
   end
 
-  subgraph WS_BRIDGE ["Local WebSocket Bridge (apps/local-bridge)"]
-    WS["WebSocket Server (:7483)\nSHA-256 Handshake Token"]
-    SEC["Security & Policy Gate\nLocalhost-only 127.0.0.1 (On-Demand)"]
+  subgraph WS_BRIDGE ["Local Bridge (apps/local-bridge)"]
+    WS["WebSocket Server (ws://127.0.0.1:7483)"]
+    AUTH["64-char SHA-256 Token Handshake"]
   end
 
-  subgraph CHROME_MV3 ["Google Chrome / Brave (User Profile)"]
-    EXT["Drishti Browser AI (v0.1.0 PRO)\nBackground Service Worker"]
-    ROUTER["🎯 Target Tab Locking Router\n(Binds all actions to selected tab)"]
-    HL["✨ Glowing Element Highlighter\n(Visual cyan box on click/type)"]
-    DOM["Self-Healing DOM Engine\n(Fuzzy selector fallbacks)"]
-    TABS["Real Logged-in Tabs & Cookies\nGitHub, YouTube, PDF Viewers, Dev Portals"]
+  subgraph MV3_EXT ["Chrome / Brave MV3 Extension (apps/chrome-extension)"]
+    BG["Service Worker (background.ts)"]
+    VIS["Shadow DOM Visual Overlay (content.ts)"]
+    UI["Popup, Sidepanel Control Deck & Options"]
   end
 
   AG --> CLI
-  AG -->|JSON-RPC stdio| MS
-  OC -->|JSON-RPC stdio| MS
-  CC -->|JSON-RPC stdio| MS
-  CR -->|JSON-RPC stdio| MS
-  CD -->|JSON-RPC stdio| MS
+  AG -->|stdio| MS
+  OC -->|stdio| MS
+  CC -->|stdio| MS
+  CR -->|stdio| MS
+  CD -->|stdio| MS
 
-  CLI --> BC
-  MS --> BC
-  BC -->|Local WS :7483| WS
-  WS --> SEC
-  SEC --> EXT
-  EXT --> ROUTER
-  ROUTER --> HL
-  HL --> DOM
-  DOM --> TABS
+  CLI --> WS
+  MS --> SQL
+  MS --> WS
+  WS --> AUTH
+  AUTH --> BG
+  BG --> VIS
+  BG --> UI
 ```
 
 ---
 
-## 💎 Key Production Innovations
+## MCP Tools Catalog (55 Tools)
 
-- **Target Tab Locking (🎯)**:
-  - Select and lock any specific tab (e.g. YouTube, PDF viewer, order form) via the crosshair icon in the Control Deck or Popup.
-  - All subsequent agent commands (`NAVIGATE`, `CLICK`, `TYPE`, `SCROLL`, `GET_DOM_SNAPSHOT`, `EXECUTE_SCRIPT`) execute **exclusively on the locked tab**, allowing you to work in other tabs without interference.
-- **Glowing Visual Element Highlighter (✨)**:
-  - Whenever an agent clicks or types into an element, a glowing cyan box (`#00f2fe`) smoothly flashes over the element in the browser viewport for 1.2s, making automated actions visible to the user in real time.
-- **Self-Healing Fuzzy Element Engine**:
-  - If a CSS selector fails or dynamic class names change, the content script automatically searches for accessible matching names, `aria-label`, button text, and placeholder attributes, resolves the target, and reports the self-healed selector in telemetry.
-- **Zero-Scratch Execution (`drishti-exec.mjs`)**:
-  - AI agents never write disposable `.mjs` scripts to disk. All browser actions execute directly via `scripts/drishti-exec.mjs <action>` or direct MCP tools.
-- **Master Safety Switch & Emergency Stop**:
-  - One-click master toggle (`AI: ON` / `PAUSED`) instantly cuts off external agent commands.
-  - Red `Stop` emergency button terminates any in-flight task immediately.
-- **100% On-Demand Architecture**:
-  - Zero Windows auto-start background persistence. Bridge only runs when you start it (`pnpm bridge:start`).
-- **Pure Vector UI Design**:
-  - Built with Tailwind CSS and Lucide React.
-  - **Zero emojis** across all extension screens.
-  - Tactile micro-interactions (`.btn-interactive`, `.chip-interactive`).
+Registered tool definitions live in `apps/mcp-server/src/tools/index.ts`; parameter schemas and examples are documented in [docs/mcp-tools-reference.md](docs/mcp-tools-reference.md).
 
----
-
-## 🛠️ Complete 37 MCP Tools Catalog
-
-| Tool Name | Category | Description |
+| Category | Count | Registered Tools |
 |---|---|---|
-| `browser_bridge_health` | Diagnostic | Real-time bridge health, round-trip latency (ms), tab count, active tab & session summary |
-| `browser_status` | Core | Returns extension connection status, version, and active tab |
-| `browser_observe` | Visual | Full accessibility tree & semantic text observation |
-| `browser_snapshot` | DOM | Structured DOM element list with bounding boxes and selectors |
-| `browser_screenshot` | Visual | Captures high-res viewport screenshot as base64 PNG/JPEG |
-| `browser_inspect` | DOM | Detailed computed styles, bounding box, and ARIA properties |
-| `browser_get_page_info` | Meta | High-level title, description, canonical link, and element counts |
-| `browser_navigate` | Navigation | Navigate tab to target URL |
-| `browser_back` | Navigation | Navigate browser history backwards |
-| `browser_forward` | Navigation | Navigate browser history forwards |
-| `browser_reload` | Navigation | Reload tab (soft reload or hard cache-bypass) |
-| `browser_wait` | Navigation | Wait for milliseconds or until CSS selector appears in DOM |
-| `browser_list_tabs` | Tabs | Enumerate all open tabs with IDs, URLs, and titles |
-| `browser_new_tab` | Tabs | Open a new tab with optional URL |
-| `browser_switch_tab` | Tabs | Activate tab by ID |
-| `browser_close_tab` | Tabs | Close tab by ID |
-| `browser_group_tabs` | Tabs | Group open tabs by domain or topic |
-| `browser_click` | Interaction | Click element matching CSS selector (with glowing visual highlighter) |
-| `browser_double_click` | Interaction | Double click element |
-| `browser_hover` | Interaction | Hover mouse over element to trigger hover states |
-| `browser_type` | Interaction | Type keystrokes into input field (with glowing visual highlighter) |
-| `browser_fill` | Interaction | Clear and fill input field with string |
-| `browser_press_key` | Interaction | Press keyboard key (Enter, Escape, Tab, modifiers) |
-| `browser_scroll` | Interaction | Scroll page or container by pixels or to element |
-| `browser_select` | Interaction | Choose option in `<select>` dropdown |
-| `browser_get_text` | Content | Extract plain text content from page or selector |
-| `browser_get_links` | Content | Extract all hyperlinks with href and anchor text |
-| `browser_find_element` | Content | Locate interactive element by text content |
-| `browser_get_tables` | Content | Extract HTML tables into structured JSON arrays |
-| `browser_get_forms` | Content | Extract form fields, input types, and action targets |
-| `browser_execute_workflow`| Automation | Run multi-step automated browser script |
-| `browser_verify_action` | Automation | Verify post-condition after action execution |
-| `browser_task_status` | Automation | Check progress of background automation |
-| `browser_stop_task` | Automation | Abort running automation task |
-| `browser_console` | Debugging | Retrieve console log/warn/error streams |
-| `browser_get_errors` | Debugging | Filter JavaScript exceptions and unhandled rejections |
-| `browser_network_inspect` | Debugging | Inspect live network requests and status codes |
+| **Browser Core** | 7 | `browser_bridge_health`, `browser_status`, `browser_observe`, `browser_snapshot`, `browser_screenshot`, `browser_inspect`, `browser_confirm` |
+| **Navigation** | 6 | `browser_navigate`, `browser_back`, `browser_forward`, `browser_reload`, `browser_wait`, `browser_wait_for` |
+| **Tab Management** | 6 | `browser_list_tabs`, `browser_switch_tab`, `browser_new_tab`, `browser_close_tab`, `browser_use_tab`, `browser_group_tabs` |
+| **Interaction** | 10 | `browser_click`, `browser_double_click`, `browser_hover`, `browser_type`, `browser_fill`, `browser_press_key`, `browser_scroll`, `browser_scroll_into_view`, `browser_select`, `browser_drag` |
+| **Content Extraction** | 5 | `browser_get_text`, `browser_get_links`, `browser_find_element`, `browser_get_tables`, `browser_get_forms` |
+| **Automation & Downloads** | 10 | `browser_get_page_info`, `browser_batch_compare`, `browser_download`, `browser_wait_download`, `browser_handle_save_dialog`, `browser_execute_workflow`, `browser_verify_action`, `browser_task`, `browser_task_status`, `browser_stop_task` |
+| **Debugging & Telemetry** | 3 | `browser_console`, `browser_get_errors`, `browser_network_inspect` |
+| **Workflow & Memory** | 8 | `browser_get_missions`, `browser_update_mission`, `browser_memory`, `workflow_start`, `workflow_stop`, `workflow_run`, `workflow_list`, `workflow_match` |
 
 ---
 
-## 🤖 1-Prompt AI Auto-Install & Setup (Any AI Agent — Zero-Clone Safe)
+## Installation & Setup
+
+### 🤖 1-Prompt AI Auto-Install & Setup (Any AI Agent — Zero-Clone Safe)
 
 Give this single prompt to **Google Antigravity**, **Gemini CLI**, **OpenCode**, **Claude Code**, **Cursor**, or **OpenAI Codex** — it checks if Drishti is already installed (never re-cloning into unrelated projects), generates your 64-char token, auto-detects or targets your active AI client, installs the `drishti-browser-agent` skill, and verifies `ONLINE` status:
 
-```xml
+```markdown
 <DRISHTI_AUTO_INSTALL>
 Set up Drishti Browser AI (दृष्टि) for me so you can control my Chrome/Brave browser via MCP:
 1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`).
@@ -172,153 +164,132 @@ Set up Drishti Browser AI (दृष्टि) for me so you can control my Chro
 </DRISHTI_AUTO_INSTALL>
 ```
 
-### Supported AI Clients (`pnpm setup:agent -- --client <name>`)
-
-| AI Client | Flag | MCP Config Path | Skill Path |
-|---|---|---|---|
-| **Auto-Detect Installed** | `--client auto` *(default)* | Detects all installed clients below | Auto-installed per client |
-| **Google Antigravity** | `--client antigravity` | `~/.gemini/antigravity/mcp_config.json` | `~/.gemini/config/skills/drishti-browser-agent/` |
-| **Gemini CLI** | `--client gemini` | `~/.gemini/settings.json` | `~/.gemini/skills/drishti-browser-agent/` |
-| **OpenCode** | `--client opencode` | `~/.config/opencode/opencode.json` | `~/.config/opencode/skills/drishti-browser-agent/` |
-| **Claude Code** | `--client claude` | `~/.claude/mcp.json` | `~/.claude/skills/drishti-browser-agent/` |
-| **Cursor IDE** | `--client cursor` | `~/.cursor/mcp.json` | — |
-| **OpenAI Codex** | `--client codex` | `~/.codex/config.toml` | `~/.codex/skills/drishti-browser-agent/` |
-
----
-
-## ⚡ Quick Start & Setup
-
-### 1. Installation & Build
-
+### 1. Clone, Install & Build
 ```bash
-# Clone repository
 git clone https://github.com/SudhirDevOps1/drishti-browser-ai.git
 cd drishti-browser-ai
-
-# Install dependencies (pnpm v9 or v10+)
 pnpm install
-
-# Build all monorepo packages
-pnpm build
-
-# Run unit tests
-pnpm test
+pnpm -r run build
 ```
+`pnpm -r run build` compiles all 11 workspace packages, runs `tsc --noEmit` on the extension, and bundles `apps/chrome-extension/dist/`.
 
-### 2. Load Extension in Chrome / Brave
+### 2. Load the Extension in Chrome or Brave
+1. Open `chrome://extensions/` (or `brave://extensions/`).
+2. Enable **Developer mode** (top-right).
+3. Click **Load unpacked** and select `apps/chrome-extension/dist` (never the uncompiled `apps/chrome-extension` root).
+4. Pin **Drishti Browser AI** to the toolbar.
 
-- **Option A (GitHub Releases)**: Download the latest `drishti-browser-ai-extension-v*.zip` from the **Releases** tab and unzip it.
-- **Option B (Local Build)**: After running `pnpm build`, load `apps/chrome-extension/dist` .
-
-1. Open Google Chrome or Brave and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** toggle in the top-right corner.
-3. Click **Load unpacked** and select `apps/chrome-extension/dist` (or the unzipped release folder).
-4. The **Drishti Browser AI** icon will appear on your toolbar.
-
-### 3. Start Local Bridge (Strictly On-Demand)
-
-Drishti does **not** run silent background auto-start scripts. Start the bridge and MCP server **only when you need them**:
-
+### 3. Configure Auth Token & Start the Local Bridge (On-Demand)
+Generate or auto-configure a 64-character token without committing `.drishti-token`:
 ```bash
+node scripts/setup-agent.mjs --client auto
+```
+Start the Local Bridge on demand:
+
+```powershell
+# PowerShell (Windows)
+$env:BRIDGE_AUTH_TOKEN = "<YOUR_64_CHAR_BRIDGE_TOKEN>"
 pnpm bridge:start
 ```
-The bridge logs `Auth token: ****xxxx (configured)` (never printing secrets in plaintext) and listens on `ws://127.0.0.1:7483`. Press `Ctrl+C` anytime to stop it cleanly.
-
----
-
-## ⬇️ Zero-Click Autonomous Downloads & Security
-
-Drishti Browser AI supports unattended downloads (videos, images, music, PDFs, or multi-GB Linux ISOs) **without disabling your browser's download protection**:
-
-- **Keep `"Ask where to save each file before downloading"` ON** in `chrome://settings/downloads` / `brave://settings/downloads` for normal daily browsing security (prevents untrusted websites from silently dropping files).
-- **Direct `http:` / `https:` Downloads (`browser_download` & `chrome.downloads.onCreated`):**
-  - When AI automation is active, Drishti intercepts webpage-triggered `http:`/`https:` downloads and routes them via `saveAs: false` into `Downloads/drishti-downloads/` with zero OS "Save As" prompts.
-- **`blob:` / `data:` Downloads (`browser_handle_save_dialog` / `OS_SAVE_DIALOG`):**
-  - For web apps like Google Flow that generate `blob:` URLs, if the browser opens a native "Save As" dialog (`<site> wants to save`), the Local Bridge confirms **Save** automatically using scoped Windows UIAutomation (strictly restricted to `#32770` dialogs owned by `chrome.exe`, `brave.exe`, or `msedge.exe`).
-- **Large File Tracking (`browser_wait_download`):**
-  - Tracks multi-GB downloads (up to 30 minutes) until `state === "complete"` and returns the final saved path and byte size.
-- **Note:** After updating Drishti, always restart the Local Bridge (`pnpm bridge:start`) and refresh the extension in `chrome://extensions/` / `brave://extensions/` so new handlers like `OS_SAVE_DIALOG` are active.
-
----
-
-## 🔒 Privacy, Security & Known Limitations
-
-- **Privacy & Security Policy**: 100% local-first (`127.0.0.1` only), zero cloud telemetry, SHA-256 handshake, password field protection, and domain allowlist/blocklist enforcement. Read full details in [docs/privacy-and-security.md](docs/privacy-and-security.md).
-- **Known Limitations**: Protected `chrome://` pages, native PDF canvas internals, cross-origin payment iframes, CAPTCHAs, and minimized-window screenshots follow Chromium MV3 sandboxing rules. Read full details in [docs/limitations.md](docs/limitations.md).
-
-### 4. Configure Extension Settings
-
-1. Click the Drishti icon in your browser and click **Settings**.
-2. Paste the 64-character auth token.
-3. Click **1. Bridge Handshake** to verify the green `ONLINE` status!
-
----
-
-## 🤖 Universal AI Agent Setup (Multi-IDE)
-
-Add this configuration to your AI agent's MCP settings:
-
-### For Google Antigravity & OpenCode:
-```json
-{
-  "mcpServers": {
-    "drishti-browser-ai": {
-      "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
-    }
-  }
-}
-```
-
-### For Claude Code (`~/.claude/mcp.json`):
-```json
-{
-  "mcpServers": {
-    "drishti-browser-ai": {
-      "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
-    }
-  }
-}
-```
-
-### For Cursor IDE (`Settings > Features > MCP`):
-- **Name**: `drishti-browser-ai`
-- **Type**: `command`
-- **Command**: `node "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"`
-
----
-
-## 🧪 Quality, Version SSOT & Automated Releases
-
-Every release is strictly verified under **Husky** + **Release Please** + **Version SSOT**:
-
-- **Single Source of Truth (`package.json#version`)**: Updating the root version via `pnpm version:bump <patch|minor|major>` or `pnpm version:sync` automatically synchronizes `apps/chrome-extension/public/manifest.json`, all workspace `package.json` files, extension UI badges, `README.md`, `HANDOFF.md`, and `MEMORY.md`.
-- **Husky Git Hooks**:
-  - `commit-msg`: Enforces Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`) via `@commitlint/cli`.
-  - `pre-commit`: Runs `pnpm version:verify` and `pnpm test` before every commit.
-- **Release Please (Auto-Tag & Extension ZIP)**:
-  - Merging a Release Please PR on `main` automatically creates the `vX.Y.Z` tag, updates `CHANGELOG.md`, builds the Chrome extension, and attaches `drishti-browser-ai-extension-vX.Y.Z.zip` to GitHub Releases.
 
 ```bash
-# Run unit test assertions
-pnpm test
+# Bash (macOS / Linux / Git Bash)
+export BRIDGE_AUTH_TOKEN="<YOUR_64_CHAR_BRIDGE_TOKEN>"
+pnpm bridge:start
+```
 
-# Verify single source of truth versioning
-pnpm version:verify
-# Result: OK — 0.1.0 in sync
+Then open **Extension Settings -> Connection & Bridge**, paste `<YOUR_64_CHAR_BRIDGE_TOKEN>`, click **Save Changes**, and run **Test Bridge Ping** to confirm `ONLINE`. *(Note: `setup:agent` installs `SKILL.md` for Antigravity, Gemini CLI, OpenCode, Claude Code, and Codex, and writes `~/.cursor/mcp.json` for Cursor.)*
+
+### 4. MCP Client Configuration
+See [docs/agent-integrations.md](docs/agent-integrations.md) and [configs/agent-configs.md](configs/agent-configs.md) for ready-to-use snippets for Antigravity, Claude Code, Cursor, OpenCode, and Codex.
+
+---
+
+## Security & Privacy Architecture
+
+Detailed documentation: [docs/privacy-and-security.md](docs/privacy-and-security.md) and [SECURITY.md](SECURITY.md).
+
+- **Localhost-Only Transport:** Bridge binds strictly to `127.0.0.1:7483` and rejects non-extension browser origins (CSWSH protection).
+- **Token Authentication:** Constant-time comparison against a 64-character secret token (`BRIDGE_AUTH_TOKEN` / `.drishti-token`). Never expose or commit your token.
+- **No MV3 `eval()` Sinks:** Arbitrary `eval()` / `new Function()` execution is disabled inside the extension.
+- **Password Field Protection:** `typeText` refuses `input[type="password"]` targets.
+- **Human-in-the-Loop Controls:** Master `AI: ON / PAUSED` switch, `Stop` emergency halt, domain allowlist/blocklist policies, and Human Takeover Yield (`mousedown` / `keydown` pauses AI briefly).
+- **Untrusted Web Content:** Page DOM and text are treated strictly as untrusted data and cannot override extension policies.
+
+---
+
+## Known Limitations & Troubleshooting
+
+- Chrome MV3 prevents scripting on `chrome://`, `brave://`, `chrome-extension://`, and Chrome Web Store URLs.
+- Background/minimized tabs may throttle `captureVisibleTab` (`CAPTURE_THROTTLED` guard backs off automatically).
+- See [docs/limitations.md](docs/limitations.md) and [docs/troubleshooting.md](docs/troubleshooting.md) for full details.
+
+---
+
+## Development, Build & Testing
+
+```bash
+pnpm version:verify   # Verify SSOT version sync across workspaces & docs
+pnpm -r run typecheck # Run TypeScript strict checks across all packages
+pnpm -r run build     # Build all apps & packages (includes tsc --noEmit)
+pnpm test             # Run Vitest unit suite (7 files, 28 tests)
+pnpm test:e2e         # Run Playwright Chromium extension E2E smoke tests
 ```
 
 ---
 
-## 📄 License
+## Project Structure
 
-MIT © [Sudhir](https://github.com/SudhirDevOps1) — Built with Google Antigravity, OpenCode, and Model Context Protocol.
+```text
+drishti-browser-ai/
+├── apps/
+│   ├── chrome-extension/   # MV3 React 18 + Tailwind + Vite extension
+│   ├── local-bridge/       # On-demand 127.0.0.1:7483 WebSocket bridge
+│   ├── mcp-server/         # 46-tool MCP stdio server + SQLite cache
+│   └── web-showcase/       # Public showcase website & SVG brand assets
+├── packages/
+│   ├── browser-core/       # Controller & observer abstractions
+│   ├── dom-engine/         # Semantic DOM, forms, tables, links
+│   ├── mcp-tools/          # Tool catalog & shared definitions
+│   ├── permission-engine/  # Domain allowlist/blocklist policy engine
+│   ├── shared-types/       # Shared TypeScript contracts & constants
+│   ├── visual-engine/      # Screenshot & visual diff utilities
+│   └── workflow-engine/    # Multi-step task execution engine
+├── docs/                   # Architecture, setup, tools, security, troubleshooting
+├── scripts/                # version.mjs, drishti-exec.mjs, setup-agent.mjs, auto_save.py
+└── tests/                  # Vitest unit tests & Playwright E2E smoke tests
+```
+
+---
+
+## Documentation Index
+
+- [Windows Installation Guide](docs/windows-install.md)
+- [System Architecture](docs/architecture.md)
+- [46 MCP Tools Reference](docs/mcp-tools-reference.md)
+- [Agent Integrations](docs/agent-integrations.md)
+- [Privacy & Security](docs/privacy-and-security.md)
+- [Developer Setup](docs/developer-setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Known Limitations](docs/limitations.md)
+- [Project Status](docs/PROJECT-STATUS.md)
+
+---
+
+## Roadmap
+
+- Cross-frame (`iframe`) visual box projection refinement.
+- Expanded Playwright visual regression assertions against `apps/chrome-extension/tests/visual-fixture.html`.
+- Additional MCP client auto-configuration templates.
+
+---
+
+## Contributing
+
+Contributions are welcome. Please follow Conventional Commits (`feat:`, `fix:`, `docs:`, `security:`, `chore:`), keep UI vector-only (`lucide-react`), and run `pnpm version:verify`, `pnpm -r run typecheck`, `pnpm -r run build`, `pnpm test`, and `pnpm test:e2e` before opening a PR.
+
+---
+
+## License & Credits
+
+[MIT](LICENSE) © [Sudhir Kumar (@SudhirDevOps1)](https://github.com/SudhirDevOps1) — Drishti Browser AI (दृष्टि).

@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/dom-engine",
+  "name": "@drishti-browser-ai/dom-engine",
   "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",

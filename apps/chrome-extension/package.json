@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/chrome-extension",
+  "name": "@drishti-browser-ai/chrome-extension",
   "version": "0.1.2",
   "type": "module",
   "private": true,

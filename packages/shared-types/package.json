@@ -1,5 +1,5 @@
 {
-  "name": "@sudhir-browser-ai/shared-types",
+  "name": "@drishti-browser-ai/shared-types",
   "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",

@@ -431,6 +431,38 @@ function scheduleHardCleanup() {
   }, 2900);
 }
 
+function hasTextCollision(el: HTMLElement, excludeHost: HTMLElement | null): boolean {
+  const br = el.getBoundingClientRect();
+  if (br.width <= 0 || br.height <= 0) return false;
+  const xs = [0.1, 0.3, 0.5, 0.7, 0.9].map((f) => Math.round(br.left + br.width * f));
+  const ys = [Math.round(br.top + br.height * 0.5), Math.round(br.bottom - 2)];
+  for (const sx of xs) {
+    for (const sy of ys) {
+      const hits = document.elementsFromPoint(sx, sy);
+      for (const hit of hits) {
+        if (
+          hit === excludeHost ||
+          hit === document.body ||
+          hit === document.documentElement ||
+          (excludeHost && excludeHost.contains(hit))
+        ) {
+          continue;
+        }
+        const hEl = hit as HTMLElement;
+        if (hEl.getAttribute('data-drishti-pending-click') === '1' || hEl.getAttribute('data-drishti-pending-type') === '1' || hEl.getAttribute('data-drishti-pending-hover') === '1') {
+          continue;
+        }
+        const directText = Array.from(hEl.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE)
+          .map((n) => (n.textContent || '').trim())
+          .join('');
+        if (directText.length > 0) return true;
+      }
+    }
+  }
+  return false;
+}
+
 function showHudBanner(shadow: ShadowRoot, hudText: string, accentBorder: string) {
   const hud = shadow.getElementById('drishti-hud') as HTMLElement | null;
   if (!hud) return;
@@ -439,8 +471,15 @@ function showHudBanner(shadow: ShadowRoot, hudText: string, accentBorder: string
   }
   hud.textContent = hudText;
   hud.style.borderColor = accentBorder;
+  hud.style.top = '14px';
+  hud.style.bottom = 'auto';
   hud.style.opacity = '1';
   hud.style.transform = 'translateY(0)';
+  const host = document.getElementById('drishti-visual-overlay');
+  if (hasTextCollision(hud, host)) {
+    hud.style.top = 'auto';
+    hud.style.bottom = '14px';
+  }
   drishtiCursorState.hudTimer = window.setTimeout(() => {
     hud.style.opacity = '0';
     hud.style.transform = 'translateY(-6px)';
@@ -473,7 +512,13 @@ function animateBezierCursor(
   pillText: string,
   rect?: { left: number; top: number; width: number; height: number },
   hudText?: string,
-  extra?: { scrollPct?: number; dragTo?: { x: number; y: number }; typingProgress?: string; verified?: boolean }
+  extra?: {
+    scrollPct?: number;
+    dragTo?: { x: number; y: number };
+    typingProgress?: string;
+    verified?: boolean;
+    realRect?: { left: number; top: number; width: number; height: number };
+  }
 ): Promise<void> {
   return new Promise((resolve) => {
     const shadow = ensureVisualOverlay();
@@ -493,7 +538,13 @@ function animateBezierCursor(
       if (errBox) {
         if (drishtiCursorState.errorTimer) window.clearTimeout(drishtiCursorState.errorTimer);
         errBox.textContent = hudText || pillText;
+        errBox.style.top = '54px';
+        errBox.style.bottom = 'auto';
         errBox.style.opacity = '1';
+        if (hasTextCollision(errBox, host)) {
+          errBox.style.top = 'auto';
+          errBox.style.bottom = '14px';
+        }
         drishtiCursorState.errorTimer = window.setTimeout(() => {
           errBox.style.opacity = '0';
           errBox.textContent = '';
@@ -570,18 +621,24 @@ function animateBezierCursor(
         if (mode === 'type') {
           drishtiCursorState.baseTypeBadge = pillText;
         }
-        // G2: above box (-26px) with >= 4px clearance, or below if rect.top < 46 / bTop - 26 < 4
-        const placeBelow = rect.top < 46 || bTop - 26 < 4;
+        // R2: Place above box, test collision via elementsFromPoint; flip below if colliding, else inside bottom-right
         boxBadge.style.bottom = 'auto';
-        boxBadge.style.top = placeBelow ? `${bHeight + 6}px` : '-26px';
+        boxBadge.style.top = '-26px';
         boxBadge.style.left = '0px';
         const br = boxBadge.getBoundingClientRect();
         if (br.width > 0) {
           let targetLeft = br.width > bWidth ? bLeft + bWidth - br.width : bLeft;
           targetLeft = Math.max(6, Math.min(vw - br.width - 6, targetLeft));
           boxBadge.style.left = `${Math.round(targetLeft - bLeft)}px`;
-          if (placeBelow && bTop + bHeight + 6 + br.height > vh - 6) {
-            boxBadge.style.top = `${Math.round(vh - 6 - br.height - bTop)}px`;
+
+          const aboveOut = rect.top < 46 || bTop - 26 < 4;
+          if (aboveOut || hasTextCollision(boxBadge, host)) {
+            boxBadge.style.top = `${bHeight + 6}px`;
+            const belowOut = bTop + bHeight + 6 + br.height > vh - 6;
+            if (belowOut || hasTextCollision(boxBadge, host)) {
+              boxBadge.style.top = `${Math.max(4, Math.round(bHeight - br.height - 4))}px`;
+              boxBadge.style.left = `${Math.max(4, Math.round(bWidth - br.width - 4))}px`;
+            }
           }
         }
       }
@@ -624,6 +681,18 @@ function animateBezierCursor(
       }
     }
 
+    // R5: For tiny real targets (<24px), offset cursor 14px lower-right of visual box while keeping trail ending at real point
+    const realR = extra?.realRect || rect;
+    const isTiny = Boolean(realR && (realR.width < 24 || realR.height < 24));
+    const vwCur = window.innerWidth || 1280;
+    const vhCur = window.innerHeight || 720;
+    const cursorFinalX = isTiny && rect
+      ? Math.min(vwCur - 24, Math.round(Math.max(6, rect.left - 5) + Math.max(rect.width + 10, 32) + 14))
+      : toX;
+    const cursorFinalY = isTiny && rect
+      ? Math.min(vhCur - 24, Math.round(Math.max(6, rect.top - 5) + Math.max(rect.height + 10, 32) + 14))
+      : toY;
+
     const p0 = { ...drishtiCursorState.pos };
     const dx = toX - p0.x;
     const dy = toY - p0.y;
@@ -651,8 +720,8 @@ function animateBezierCursor(
       const cx = omt * omt * omt * p0.x + 3 * omt * omt * t * p1.x + 3 * omt * t * t * p2.x + t * t * t * p3.x;
       const cy = omt * omt * omt * p0.y + 3 * omt * omt * t * p1.y + 3 * omt * t * t * p2.y + t * t * t * p3.y;
 
-      cursor.style.left = `${Math.round(cx)}px`;
-      cursor.style.top = `${Math.round(cy)}px`;
+      cursor.style.left = `${Math.round(rawT >= 1 ? cursorFinalX : cx)}px`;
+      cursor.style.top = `${Math.round(rawT >= 1 ? cursorFinalY : cy)}px`;
       drishtiCursorState.pos = { x: cx, y: cy };
 
       if (now - lastTrailAt > 26 && rawT < 0.96) {
@@ -702,7 +771,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message.type === 'DRISHTI_CURSOR_ACTION') {
-    const { mode, x, y, rect, durationMs, label, hudText, scrollPct, dragTo, typingProgress, verified } =
+    const { mode, x, y, rect, durationMs, label, hudText, scrollPct, dragTo, typingProgress, verified, realRect } =
       message.payload || {};
     animateBezierCursor(
       typeof mode === 'string' ? mode : 'move',
@@ -712,7 +781,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       label || 'DRISHTI AI',
       rect,
       typeof hudText === 'string' ? hudText : undefined,
-      { scrollPct, dragTo, typingProgress, verified }
+      { scrollPct, dragTo, typingProgress, verified, realRect }
     ).then(() => {
       if (mode === 'click') {
         triggerClickRipple(
