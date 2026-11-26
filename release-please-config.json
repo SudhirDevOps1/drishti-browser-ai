@@ -32,6 +32,11 @@
         },
         {
           "type": "json",
+          "path": "apps/web-showcase/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
           "path": "apps/local-bridge/package.json",
           "jsonpath": "$.version"
         },
