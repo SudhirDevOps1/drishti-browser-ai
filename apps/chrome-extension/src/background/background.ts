@@ -915,20 +915,28 @@ async function getCursorSpeedMs(): Promise<number> {
 
 async function dispatchShadowCursor(
   tabId: number,
-  mode: 'move' | 'hover' | 'click' | 'type' | 'scroll',
+  mode: 'move' | 'hover' | 'click' | 'type' | 'scroll' | 'key',
   x: number,
   y: number,
   label: string,
-  rect?: { left: number; top: number; width: number; height: number }
+  rect?: { left: number; top: number; width: number; height: number },
+  hudText?: string
 ): Promise<void> {
   const durationMs = await getCursorSpeedMs();
+  const message = {
+    type: 'DRISHTI_CURSOR_ACTION',
+    payload: { mode, x, y, rect, durationMs, label, hudText },
+  };
   try {
-    await chrome.tabs.sendMessage(tabId, {
-      type: 'DRISHTI_CURSOR_ACTION',
-      payload: { mode, x, y, rect, durationMs, label },
-    });
+    await chrome.tabs.sendMessage(tabId, message);
   } catch {
-    // Content script may not be ready on special pages
+    // Content script may not be loaded on tabs opened before extension reload — inject and retry once
+    try {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      await chrome.tabs.sendMessage(tabId, message);
+    } catch {
+      // Ignore on restricted pages
+    }
   }
 }
 
@@ -978,9 +986,12 @@ async function hoverElement(payload: Record<string, unknown>): Promise<unknown> 
 
   await yieldIfHumanActive();
 
+  const refSelector = payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null;
+  const resolvedSelector = (payload.selector as string) || refSelector || '';
+
   const locateRes = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (selector: string) => {
+    func: async (selector: string) => {
       let el = document.querySelector(selector) as HTMLElement | null;
       if (!el) {
         const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
@@ -995,25 +1006,60 @@ async function hoverElement(payload: Record<string, unknown>): Promise<unknown> 
           }) || null;
       }
       if (!el) throw new Error(`Element not found for hover: ${selector}`);
-      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+      const initialRect = el.getBoundingClientRect();
+      if (initialRect.top < 24 || initialRect.bottom > window.innerHeight - 24) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        await new Promise<void>((resolve) => {
+          let lastTop = initialRect.top;
+          let stableFrames = 0;
+          const started = performance.now();
+          const check = () => {
+            const r = el!.getBoundingClientRect();
+            if (Math.abs(r.top - lastTop) < 0.75) {
+              stableFrames++;
+            } else {
+              stableFrames = 0;
+            }
+            lastTop = r.top;
+            if (stableFrames >= 3 || performance.now() - started > 450) {
+              resolve();
+            } else {
+              requestAnimationFrame(check);
+            }
+          };
+          requestAnimationFrame(check);
+        });
+      }
+
       const rect = el.getBoundingClientRect();
-      el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      const shortText = (el.getAttribute('aria-label') || el.textContent || selector).trim().slice(0, 28);
       return {
         x: Math.round(rect.left + rect.width / 2),
         y: Math.round(rect.top + rect.height / 2),
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        hudText: `DRISHTI AI • HOVER "${shortText}"`,
       };
     },
-    args: [String(payload.selector || '')],
+    args: [resolvedSelector],
   });
 
   const coords = locateRes[0]?.result;
   if (coords) {
-    await dispatchShadowCursor(target, 'hover', coords.x, coords.y, 'HOVERING', coords.rect);
-    await new Promise((r) => setTimeout(r, 200));
+    await dispatchShadowCursor(target, 'hover', coords.x, coords.y, 'AI HOVER', coords.rect, coords.hudText);
+    await chrome.scripting.executeScript({
+      target: { tabId: target },
+      func: (selector: string) => {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) return;
+        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+      },
+      args: [resolvedSelector],
+    }).catch(() => {});
   }
-  return { hovered: payload.selector, ...coords };
+  return { hovered: resolvedSelector, ...coords };
 }
 
 async function clickElement(payload: Record<string, unknown>): Promise<unknown> {
@@ -1085,7 +1131,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     })
     .catch(() => {});
 
-  const results = await chrome.scripting.executeScript({
+  const locateRes = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: async (
       selector: string | null,
@@ -1093,134 +1139,38 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
       y: number | null,
       learnedSelector: string | null
     ) => {
-      function glideCursorToRect(rect: DOMRect, badgeText: string = 'DRISHTI AI') {
-        try {
-          const w = window as unknown as { __drishtiCursorPos?: { x: number; y: number } };
-          const prev = w.__drishtiCursorPos || {
-            x: Math.round(window.innerWidth / 2),
-            y: Math.round(window.innerHeight / 2),
+      async function waitScrollSettle(element: HTMLElement) {
+        const r0 = element.getBoundingClientRect();
+        if (r0.top >= 24 && r0.bottom <= window.innerHeight - 24) return;
+        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        await new Promise<void>((resolve) => {
+          let lastTop = r0.top;
+          let stable = 0;
+          const started = performance.now();
+          const tick = () => {
+            const r = element.getBoundingClientRect();
+            if (Math.abs(r.top - lastTop) < 0.75) stable++;
+            else stable = 0;
+            lastTop = r.top;
+            if (stable >= 3 || performance.now() - started > 450) resolve();
+            else requestAnimationFrame(tick);
           };
-          const targetX = Math.round(rect.left + rect.width / 2);
-          const targetY = Math.round(rect.top + rect.height / 2);
-          w.__drishtiCursorPos = { x: targetX, y: targetY };
-
-          let cursor = document.querySelector('[data-drishti-cursor="true"]') as HTMLElement | null;
-          if (!cursor) {
-            cursor = document.createElement('div');
-            cursor.setAttribute('data-drishti-cursor', 'true');
-            cursor.style.position = 'fixed';
-            cursor.style.pointerEvents = 'none';
-            cursor.style.zIndex = '2147483647';
-            cursor.style.transition =
-              'left 340ms cubic-bezier(0.22, 1, 0.36, 1), top 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 250ms ease';
-            cursor.innerHTML =
-              '<svg width="24" height="24" viewBox="0 0 24 24" style="filter:drop-shadow(0 0 8px #00f2fe)"><path d="M4 2L20 11L12.5 13.2L10 21L4 2Z" fill="#00f2fe" stroke="#060a12" stroke-width="1.6"/></svg>' +
-              `<span style="position:absolute;left:20px;top:16px;background:linear-gradient(90deg,#00f2fe,#4facfe);color:#060a12;font:900 10px/1 ui-monospace,monospace;padding:3px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,242,254,0.5)">${badgeText}</span>`;
-            document.body.appendChild(cursor);
-          }
-
-          cursor.style.left = `${prev.x}px`;
-          cursor.style.top = `${prev.y}px`;
-          cursor.style.opacity = '1';
-          void cursor.offsetWidth;
-          cursor.style.left = `${targetX}px`;
-          cursor.style.top = `${targetY}px`;
-
-          setTimeout(() => {
-            if (cursor) {
-              cursor.style.opacity = '0';
-              setTimeout(() => cursor?.remove(), 260);
-            }
-          }, 1400);
-        } catch {}
+          requestAnimationFrame(tick);
+        });
       }
 
-      function flashHighlight(element: HTMLElement, label: string = 'AI CLICK') {
-        try {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-          const rect = element.getBoundingClientRect();
-          glideCursorToRect(rect, label);
-          const hl = document.createElement('div');
-          hl.setAttribute('data-drishti-highlight', 'true');
-          hl.style.position = 'fixed';
-          hl.style.top = `${Math.max(0, rect.top - 5)}px`;
-          hl.style.left = `${Math.max(0, rect.left - 5)}px`;
-          hl.style.width = `${Math.max(rect.width + 10, 20)}px`;
-          hl.style.height = `${Math.max(rect.height + 10, 20)}px`;
-          hl.style.border = '3px solid #00f2fe';
-          hl.style.borderRadius = '8px';
-          hl.style.boxShadow = '0 0 28px rgba(0, 242, 254, 0.95), inset 0 0 14px rgba(0, 242, 254, 0.35)';
-          hl.style.pointerEvents = 'none';
-          hl.style.zIndex = '2147483647';
-          hl.style.transition = 'opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
-          hl.style.opacity = '1';
-          hl.style.transform = 'scale(1.03)';
-
-          const badge = document.createElement('span');
-          badge.textContent = label;
-          badge.style.position = 'absolute';
-          badge.style.top = '-22px';
-          badge.style.left = '0';
-          badge.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
-          badge.style.color = '#000';
-          badge.style.fontSize = '10px';
-          badge.style.fontWeight = '900';
-          badge.style.padding = '2px 6px';
-          badge.style.borderRadius = '4px';
-          badge.style.boxShadow = '0 2px 10px rgba(0,0,0,0.6)';
-          badge.style.letterSpacing = '0.5px';
-          badge.style.fontFamily = 'monospace, sans-serif';
-          hl.appendChild(badge);
-
-          document.body.appendChild(hl);
-          setTimeout(() => {
-            hl.style.opacity = '0';
-            hl.style.transform = 'scale(1)';
-            setTimeout(() => hl.remove(), 900);
-          }, 1400);
-        } catch {}
-      }
-
-      async function humanClick(element: HTMLElement, label: string = 'AI CLICK') {
-        flashHighlight(element, label);
-        await new Promise((r) => setTimeout(r, 360));
-        try {
-          const rect = element.getBoundingClientRect();
-          const ripple = document.createElement('div');
-          ripple.style.position = 'fixed';
-          ripple.style.left = `${Math.round(rect.left + rect.width / 2 - 14)}px`;
-          ripple.style.top = `${Math.round(rect.top + rect.height / 2 - 14)}px`;
-          ripple.style.width = '28px';
-          ripple.style.height = '28px';
-          ripple.style.borderRadius = '9999px';
-          ripple.style.border = '3px solid #00f2fe';
-          ripple.style.boxShadow = '0 0 18px #00f2fe';
-          ripple.style.pointerEvents = 'none';
-          ripple.style.zIndex = '2147483647';
-          ripple.style.transform = 'scale(0.5)';
-          ripple.style.opacity = '1';
-          ripple.style.transition = 'transform 260ms ease-out, opacity 260ms ease-out';
-          document.body.appendChild(ripple);
-          void ripple.offsetWidth;
-          ripple.style.transform = 'scale(1.9)';
-          ripple.style.opacity = '0';
-          setTimeout(() => ripple.remove(), 280);
-        } catch {}
-        await new Promise((r) => setTimeout(r, 140));
-        element.click();
-      }
+      let el: HTMLElement | null = null;
+      let usedLearned = false;
+      let selfHealed = false;
+      let resolvedSelector: string | null = null;
 
       if (selector) {
-        let el = document.querySelector(selector) as HTMLElement;
+        el = document.querySelector(selector) as HTMLElement | null;
         if (!el && learnedSelector) {
-          el = document.querySelector(learnedSelector) as HTMLElement;
-          if (el) {
-            await humanClick(el, 'AI LEARNED');
-            return { clicked: selector, usedLearnedSelector: learnedSelector };
-          }
+          el = document.querySelector(learnedSelector) as HTMLElement | null;
+          if (el) usedLearned = true;
         }
         if (!el) {
-          // Self-Healing Fuzzy Element Finder (interactive elements prioritized over generic wrappers)
           const cleanText = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
           const candidates = [
             ...Array.from(document.querySelectorAll('a, button, input, [role="button"], [role="link"], [role="menuitem"]')),
@@ -1236,41 +1186,46 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
               (cleanText && titleMatch.includes(cleanText))
             ) {
               el = cand;
+              selfHealed = true;
+              const aria = cand.getAttribute('aria-label');
+              resolvedSelector = cand.id
+                ? `#${cand.id}`
+                : aria
+                ? `[aria-label="${aria.replace(/"/g, '\\"')}"]`
+                : null;
               break;
             }
           }
-          if (el) {
-            await humanClick(el, 'AI CLICK');
-            const aria = el.getAttribute('aria-label');
-            const resolvedSelector = el.id
-              ? `#${el.id}`
-              : aria
-              ? `[aria-label="${aria.replace(/"/g, '\\"')}"]`
-              : null;
-            return { clicked: selector, selfHealed: true, resolvedSelector, matchedText: (el.textContent || '').trim().slice(0, 50) };
-          }
-          throw new Error(`Element not found: ${selector}`);
         }
-        await humanClick(el, 'AI CLICK');
-        return {
-          clicked: selector,
-          url: window.location.href,
-          title: document.title,
-          interactiveCount: document.querySelectorAll('a,button,input,select,textarea,[role="button"]').length,
-        };
+        if (!el) throw new Error(`Element not found: ${selector}`);
       } else if (x !== null && y !== null) {
-        const el = document.elementFromPoint(x, y) as HTMLElement;
-        if (el) {
-          await humanClick(el, 'AI CLICK');
-          return {
-            clicked: `element at (${x},${y})`,
-            url: window.location.href,
-            title: document.title,
-          };
-        }
-        throw new Error(`No element at (${x},${y})`);
+        el = document.elementFromPoint(x, y) as HTMLElement | null;
+        if (!el) throw new Error(`No element at (${x},${y})`);
+      } else {
+        throw new Error('selector or coordinates required');
       }
-      throw new Error('selector or coordinates required');
+
+      await waitScrollSettle(el);
+      const rect = el.getBoundingClientRect();
+      const shortText = (el.getAttribute('aria-label') || el.textContent || selector || 'element').trim().slice(0, 28);
+      const isCopyBtn = /copy/i.test(shortText);
+      const label = usedLearned ? 'AI LEARNED' : isCopyBtn ? 'AI COPY' : 'AI CLICK';
+      const hudText = isCopyBtn
+        ? `DRISHTI AI • COPY "${shortText}"`
+        : `DRISHTI AI • CLICK "${shortText}"`;
+
+      el.setAttribute('data-drishti-pending-click', '1');
+      return {
+        x: x !== null && !selector ? x : Math.round(rect.left + rect.width / 2),
+        y: y !== null && !selector ? y : Math.round(rect.top + rect.height / 2),
+        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        label,
+        hudText,
+        usedLearned,
+        selfHealed,
+        resolvedSelector,
+        matchedText: shortText,
+      };
     },
     args: [
       resolvedInputSelector,
@@ -1280,42 +1235,56 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     ],
   });
 
-  const res = results[0]?.result as any;
-  if (res?.selfHealed && res?.resolvedSelector && hostname && payload.selector) {
-    await recordLearnedSelector(hostname, String(payload.selector), String(res.resolvedSelector));
+  const prep = results[0]?.result as {
+    x: number;
+    y: number;
+    rect: { left: number; top: number; width: number; height: number };
+    label: string;
+    hudText: string;
+    usedLearned: boolean;
+    selfHealed: boolean;
+    resolvedSelector: string | null;
+    matchedText: string;
+  };
+
+  if (prep) {
+    await dispatchShadowCursor(target, 'click', prep.x, prep.y, prep.label, prep.rect, prep.hudText);
+    await new Promise((r) => setTimeout(r, 60));
   }
-  // Mirror click onto persistent Shadow DOM Bezier cursor + optional Trusted CDP click
-  if (payload.selector || (payload.x !== undefined && payload.y !== undefined)) {
-    const rectInfo = await chrome.scripting
-      .executeScript({
-        target: { tabId: target },
-        func: (sel: string | null, px: number | null, py: number | null) => {
-          if (sel) {
-            const el = document.querySelector(sel) as HTMLElement | null;
-            if (el) {
-              const r = el.getBoundingClientRect();
-              return {
-                x: Math.round(r.left + r.width / 2),
-                y: Math.round(r.top + r.height / 2),
-                rect: { left: r.left, top: r.top, width: r.width, height: r.height },
-              };
-            }
-          }
-          if (px !== null && py !== null) {
-            return { x: px, y: py };
-          }
-          return null;
-        },
-        args: [(payload.selector as string) || null, (payload.x as number) ?? null, (payload.y as number) ?? null],
-      })
-      .then((r) => r[0]?.result)
-      .catch(() => null);
-    if (rectInfo) {
-      await dispatchShadowCursor(target, 'click', rectInfo.x, rectInfo.y, 'AI CLICK', rectInfo.rect);
-      await trustedCdpClick(target, rectInfo.x, rectInfo.y);
-    }
+
+  const clickRes = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string | null, x: number | null, y: number | null) => {
+      const el =
+        (document.querySelector('[data-drishti-pending-click="1"]') as HTMLElement | null) ||
+        (selector ? (document.querySelector(selector) as HTMLElement | null) : null) ||
+        (x !== null && y !== null ? (document.elementFromPoint(x, y) as HTMLElement | null) : null);
+      if (el) {
+        el.removeAttribute('data-drishti-pending-click');
+        el.click();
+      }
+      return {
+        clicked: selector || `element at (${x},${y})`,
+        url: window.location.href,
+        title: document.title,
+        interactiveCount: document.querySelectorAll('a,button,input,select,textarea,[role="button"]').length,
+      };
+    },
+    args: [resolvedInputSelector, (payload.x as number) ?? null, (payload.y as number) ?? null],
+  });
+
+  if (prep) {
+    await trustedCdpClick(target, prep.x, prep.y);
   }
-  return res;
+
+  if (prep?.selfHealed && prep?.resolvedSelector && hostname && payload.selector) {
+    await recordLearnedSelector(hostname, String(payload.selector), String(prep.resolvedSelector));
+  }
+  return {
+    ...(clickRes[0]?.result || {}),
+    ...(prep?.usedLearned ? { usedLearnedSelector: learnedSel } : {}),
+    ...(prep?.selfHealed ? { selfHealed: true, resolvedSelector: prep.resolvedSelector, matchedText: prep.matchedText } : {}),
+  };
 }
 
 async function typeText(payload: Record<string, unknown>): Promise<unknown> {
@@ -1378,107 +1347,19 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     })
     .catch(() => {});
 
-  const results = await chrome.scripting.executeScript({
+  const resolvedTypeSelector =
+    (payload.selector as string) || (payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null);
+  const textToType = String(payload.text ?? '');
+  const clearFirst = Boolean(payload.clearFirst ?? payload.clear);
+  const instantType = Boolean(payload.instant);
+
+  const prepTypeRes = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: async (selector: string | null, text: string, clearFirst: boolean, instant: boolean) => {
-      function glideCursorToRect(rect: DOMRect) {
-        try {
-          const w = window as unknown as { __drishtiCursorPos?: { x: number; y: number } };
-          const prev = w.__drishtiCursorPos || {
-            x: Math.round(window.innerWidth / 2),
-            y: Math.round(window.innerHeight / 2),
-          };
-          const targetX = Math.round(rect.left + rect.width / 2);
-          const targetY = Math.round(rect.top + rect.height / 2);
-          w.__drishtiCursorPos = { x: targetX, y: targetY };
-
-          let cursor = document.querySelector('[data-drishti-cursor="true"]') as HTMLElement | null;
-          if (!cursor) {
-            cursor = document.createElement('div');
-            cursor.setAttribute('data-drishti-cursor', 'true');
-            cursor.style.position = 'fixed';
-            cursor.style.width = '18px';
-            cursor.style.height = '18px';
-            cursor.style.marginLeft = '-9px';
-            cursor.style.marginTop = '-9px';
-            cursor.style.borderRadius = '9999px';
-            cursor.style.border = '2px solid #00f2fe';
-            cursor.style.background = 'rgba(0, 242, 254, 0.22)';
-            cursor.style.boxShadow = '0 0 14px rgba(0, 242, 254, 0.85)';
-            cursor.style.pointerEvents = 'none';
-            cursor.style.zIndex = '2147483647';
-            cursor.style.transition =
-              'left 260ms cubic-bezier(0.22, 1, 0.36, 1), top 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease';
-            document.body.appendChild(cursor);
-          }
-
-          cursor.style.left = `${prev.x}px`;
-          cursor.style.top = `${prev.y}px`;
-          cursor.style.opacity = '1';
-          void cursor.offsetWidth;
-          cursor.style.left = `${targetX}px`;
-          cursor.style.top = `${targetY}px`;
-
-          setTimeout(() => {
-            if (cursor) {
-              cursor.style.opacity = '0';
-              setTimeout(() => cursor?.remove(), 240);
-            }
-          }, 900);
-        } catch {}
-      }
-
-      function flashHighlight(element: HTMLElement, label: string = 'AI TYPE') {
-        try {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-          const rect = element.getBoundingClientRect();
-          glideCursorToRect(rect);
-          const hl = document.createElement('div');
-          hl.setAttribute('data-drishti-highlight', 'true');
-          hl.style.position = 'fixed';
-          hl.style.top = `${Math.max(0, rect.top - 4)}px`;
-          hl.style.left = `${Math.max(0, rect.left - 4)}px`;
-          hl.style.width = `${Math.max(rect.width + 8, 16)}px`;
-          hl.style.height = `${Math.max(rect.height + 8, 16)}px`;
-          hl.style.border = '2px solid #00f2fe';
-          hl.style.borderRadius = '6px';
-          hl.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.85), inset 0 0 10px rgba(0, 242, 254, 0.25)';
-          hl.style.pointerEvents = 'none';
-          hl.style.zIndex = '2147483647';
-          hl.style.transition = 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
-          hl.style.opacity = '1';
-          hl.style.transform = 'scale(1.02)';
-
-          const badge = document.createElement('span');
-          badge.textContent = label;
-          badge.style.position = 'absolute';
-          badge.style.top = '-20px';
-          badge.style.left = '0';
-          badge.style.background = 'linear-gradient(90deg, #00f2fe, #4facfe)';
-          badge.style.color = '#000';
-          badge.style.fontSize = '9px';
-          badge.style.fontWeight = '900';
-          badge.style.padding = '1px 5px';
-          badge.style.borderRadius = '3px';
-          badge.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
-          badge.style.letterSpacing = '0.5px';
-          badge.style.fontFamily = 'monospace, sans-serif';
-          hl.appendChild(badge);
-
-          document.body.appendChild(hl);
-          setTimeout(() => {
-            hl.style.opacity = '0';
-            hl.style.transform = 'scale(1)';
-            setTimeout(() => hl.remove(), 800);
-          }, 800);
-        } catch {}
-      }
-
+    func: async (selector: string | null, text: string) => {
       let el: HTMLInputElement | HTMLTextAreaElement | null = null;
       if (selector) {
         el = document.querySelector(selector) as HTMLInputElement;
         if (!el) {
-          // Self-healing fuzzy input finder
           const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
           const inputs = Array.from(
             document.querySelectorAll('input:not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')
@@ -1492,22 +1373,67 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
               break;
             }
           }
-          if (!el && inputs.length > 0) {
-            el = inputs[0];
-          }
+          if (!el && inputs.length > 0) el = inputs[0] as HTMLInputElement;
         }
       } else {
         el = document.activeElement as HTMLInputElement;
       }
       if (!el) throw new Error('No target element for typing');
-
-      // Safety: never type into password fields via automation
       if (el instanceof HTMLInputElement && el.type === 'password') {
         throw new Error('Cannot type into password fields via automation');
       }
 
-      flashHighlight(el, 'AI TYPE');
-      await new Promise((r) => setTimeout(r, 320));
+      const r0 = el.getBoundingClientRect();
+      if (r0.top < 24 || r0.bottom > window.innerHeight - 24) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        await new Promise<void>((resolve) => {
+          let lastTop = r0.top;
+          let stable = 0;
+          const started = performance.now();
+          const tick = () => {
+            const r = el!.getBoundingClientRect();
+            if (Math.abs(r.top - lastTop) < 0.75) stable++;
+            else stable = 0;
+            lastTop = r.top;
+            if (stable >= 3 || performance.now() - started > 450) resolve();
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      }
+
+      el.setAttribute('data-drishti-pending-type', '1');
+      const rect = el.getBoundingClientRect();
+      const preview = text.length > 22 ? `${text.slice(0, 22)}…` : text;
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        hudText: `DRISHTI AI • TYPE "${preview}"`,
+      };
+    },
+    args: [resolvedTypeSelector, textToType],
+  });
+
+  const typePrep = prepTypeRes[0]?.result as
+    | { x: number; y: number; rect: { left: number; top: number; width: number; height: number }; hudText: string }
+    | undefined;
+  if (typePrep) {
+    await dispatchShadowCursor(target, 'type', typePrep.x, typePrep.y, 'AI TYPE', typePrep.rect, typePrep.hudText);
+  }
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: async (selector: string | null, text: string, clearFirst: boolean, instant: boolean) => {
+      const el =
+        (document.querySelector('[data-drishti-pending-type="1"]') as HTMLInputElement | HTMLTextAreaElement | null) ||
+        (selector ? (document.querySelector(selector) as HTMLInputElement | null) : (document.activeElement as HTMLInputElement | null));
+      if (!el) throw new Error('No target element for typing');
+      el.removeAttribute('data-drishti-pending-type');
+      if (el instanceof HTMLInputElement && el.type === 'password') {
+        throw new Error('Cannot type into password fields via automation');
+      }
+
       el.focus();
 
       // Handle contenteditable / Slate / ProseMirror / TipTap rich-text editors
@@ -1568,10 +1494,10 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
       };
     },
     args: [
-      (payload.selector as string) || (payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null),
-      payload.text as string,
-      Boolean(payload.clearFirst ?? payload.clear),
-      Boolean(payload.instant),
+      resolvedTypeSelector,
+      textToType,
+      clearFirst,
+      instantType,
     ],
   });
 
@@ -1586,54 +1512,33 @@ async function scrollPage(payload: Record<string, unknown>): Promise<unknown> {
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
 
+  const direction = (payload.direction as string) || 'down';
+  const amount = (payload.amount as number) || 300;
+  await dispatchShadowCursor(
+    target,
+    'scroll',
+    0,
+    0,
+    'SCROLL',
+    undefined,
+    `DRISHTI AI • SCROLL ${direction.toUpperCase()} ${amount}px`
+  );
+
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (direction: string, amount: number) => {
+    func: async (dir: string, amt: number) => {
       const scrollMap: Record<string, [number, number]> = {
-        down: [0, amount],
-        up: [0, -amount],
-        right: [amount, 0],
-        left: [-amount, 0],
+        down: [0, amt],
+        up: [0, -amt],
+        right: [amt, 0],
+        left: [-amt, 0],
       };
-      const [x, y] = scrollMap[direction] || [0, amount];
+      const [x, y] = scrollMap[dir] || [0, amt];
       window.scrollBy({ left: x, top: y, behavior: 'smooth' });
-      try {
-        let hud = document.querySelector('[data-drishti-hud="true"]') as HTMLElement | null;
-        if (!hud) {
-          hud = document.createElement('div');
-          hud.setAttribute('data-drishti-hud', 'true');
-          hud.style.position = 'fixed';
-          hud.style.top = '14px';
-          hud.style.right = '14px';
-          hud.style.zIndex = '2147483647';
-          hud.style.pointerEvents = 'none';
-          hud.style.padding = '6px 12px';
-          hud.style.borderRadius = '9999px';
-          hud.style.background = 'rgba(6, 10, 18, 0.9)';
-          hud.style.border = '1.5px solid #00f2fe';
-          hud.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.45)';
-          hud.style.color = '#e0faff';
-          hud.style.fontFamily = 'ui-monospace, monospace';
-          hud.style.fontSize = '11px';
-          hud.style.fontWeight = '700';
-          hud.style.transition = 'opacity 250ms ease';
-          document.body.appendChild(hud);
-        }
-        hud.textContent = `DRISHTI AI • SCROLL ${direction.toUpperCase()} ${amount}px`;
-        hud.style.opacity = '1';
-        setTimeout(() => {
-          if (hud) {
-            hud.style.opacity = '0';
-            setTimeout(() => hud?.remove(), 260);
-          }
-        }, 1200);
-      } catch {}
-      return { scrolled: direction, amount };
+      await new Promise((r) => setTimeout(r, 320));
+      return { scrolled: dir, amount: amt };
     },
-    args: [
-      (payload.direction as string) || 'down',
-      (payload.amount as number) || 300,
-    ],
+    args: [direction, amount],
   });
 
   return results[0]?.result;
@@ -1646,6 +1551,9 @@ async function pressKey(payload: Record<string, unknown>): Promise<unknown> {
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+
+  const keyName = String(payload.key || 'Enter');
+  await dispatchShadowCursor(target, 'key', 0, 0, 'KEY', undefined, `DRISHTI AI • KEY ${keyName}`);
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
