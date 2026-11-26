@@ -35,6 +35,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { HeroCanvas } from './components/HeroCanvas';
+import { DrishtiHeroStage } from './components/DrishtiHeroStage';
+import { DrishtiBentoGrid } from './components/DrishtiBentoGrid';
+import { Navbar } from './components/Navbar';
 import siteData from './generated/site-data.json';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -247,10 +250,10 @@ const TERMINAL_LINES = [
   { delay: 450,  text: '✓ 847 packages resolved', color: 'text-emerald-400' },
   { delay: 900,  text: '$ pnpm -r run build', color: 'text-cyan-300' },
   { delay: 1400, text: '✓ @drishti/shared-types & core packages built', color: 'text-slate-400' },
-  { delay: 1900, text: '✓ @drishti/mcp-tools (46 tools) built', color: 'text-slate-400' },
+  { delay: 1900, text: '✓ @drishti-browser-ai/mcp-server (55 tools) built', color: 'text-slate-400' },
   { delay: 2400, text: '✓ chrome-extension: tsc --noEmit + vite build', color: 'text-emerald-400' },
   { delay: 2900, text: '$ pnpm test', color: 'text-cyan-300' },
-  { delay: 3300, text: '✓ 26/26 unit tests passed (6 files)', color: 'text-emerald-400' },
+  { delay: 3300, text: '✓ 28/28 unit tests passed (7 files)', color: 'text-emerald-400' },
   { delay: 3750, text: '$ pnpm test:e2e', color: 'text-cyan-300' },
   { delay: 4200, text: '✓ 4/4 Playwright Chromium E2E passed', color: 'text-emerald-400' },
   { delay: 4650, text: '🚀 All checks green — v' + data.version + ' live!', color: 'text-cyan-200' },
@@ -740,7 +743,6 @@ export function App() {
   const [docQuery, setDocQuery] = useState('');
   const [statsStarted, setStatsStarted] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Gallery filter + Lightbox state
   const [galleryCategory, setGalleryCategory] = useState<GalleryCategory>('All');
@@ -958,74 +960,7 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
       </div>
 
       {/* ── Navbar ── */}
-      <header className="sticky top-0 z-50 nav-pill border-b border-slate-800/60 bg-[#050914]/85">
-        <div className="max-w-7xl mx-auto px-5 h-16 flex items-center justify-between">
-          <a href="#" className="flex items-center gap-2.5">
-            <img
-              src="./brand/drishti-icon.svg"
-              alt="Drishti Browser AI Icon"
-              className="w-8 h-8 rounded-xl shadow-lg shadow-cyan-500/25"
-            />
-            <div>
-              <span className="font-extrabold tracking-tight text-white text-sm">Drishti Browser AI</span>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
-                v{data.version}
-              </span>
-            </div>
-          </a>
-
-          <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-slate-400">
-            {navItems.map(item => (
-              <a key={item.href} href={item.href} className="hover:text-cyan-300 transition-colors">
-                {item.label}
-              </a>
-            ))}
-            <a
-              href={data.repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 hover:border-cyan-500/50 transition neon-border"
-            >
-              <Github className="w-3.5 h-3.5" />
-              <span>GitHub</span>
-            </a>
-          </nav>
-
-          {/* Mobile Menu Toggle */}
-          <button
-            type="button"
-            aria-label="Toggle Menu"
-            onClick={() => setMobileMenuOpen(o => !o)}
-            className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-200"
-          >
-            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Mobile Drawer */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-800 bg-[#060f1e] px-5 py-4 space-y-2">
-            {navItems.map(item => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className="block py-2 text-xs font-bold text-slate-300 hover:text-cyan-300"
-              >
-                {item.label}
-              </a>
-            ))}
-            <a
-              href={data.repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-cyan-300"
-            >
-              <Github className="w-3.5 h-3.5" /> GitHub Repo
-            </a>
-          </div>
-        )}
-      </header>
+      <Navbar version={data.version} repoUrl={data.repoUrl} navItems={navItems} />
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden">
@@ -1080,14 +1015,14 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
               </a>
               <a
                 href="#gallery"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-transparent hover:bg-slate-900/70 border border-slate-800 hover:border-slate-600 text-slate-300 text-xs font-semibold transition"
               >
                 <Eye className="w-4 h-4 text-cyan-400" />
                 <span>Visual Gallery</span>
               </a>
               <a
                 href="#tools"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-transparent hover:bg-slate-900/70 border border-slate-800 hover:border-slate-600 text-slate-300 text-xs font-semibold transition tabular-nums"
               >
                 <Wrench className="w-4 h-4 text-cyan-400" />
                 <span>{allTools.length} MCP Tools</span>
@@ -1096,12 +1031,33 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
           </div>
 
           <div className="lg:col-span-6 space-y-4">
-            <div className="hero-stagger">
-              <TerminalWindow />
+            <div className="hero-stagger space-y-3">
+              <DrishtiHeroStage />
+              <details className="group rounded-xl border border-[#1E2B4D]/80 bg-[#080D1B]/70 px-3.5 py-2">
+                <summary className="cursor-pointer list-none flex items-center justify-between text-xs font-mono text-[#8995AE] hover:text-[#00E5FF] transition-colors">
+                  <span className="flex items-center gap-2">
+                    <Terminal className="w-3.5 h-3.5 text-[#00E5FF]" />
+                    CLI Bridge Terminal (pnpm setup:agent)
+                  </span>
+                  <span className="text-[10px] text-[#625BFF] group-open:hidden">
+                    Expand
+                  </span>
+                  <span className="text-[10px] text-[#625BFF] hidden group-open:inline">
+                    Collapse
+                  </span>
+                </summary>
+                <div className="mt-3">
+                  <TerminalWindow />
+                </div>
+              </details>
             </div>
           </div>
         </div>
       </section>
+
+      <div className="section-divider" />
+
+      <DrishtiBentoGrid />
 
       <div className="section-divider" />
 

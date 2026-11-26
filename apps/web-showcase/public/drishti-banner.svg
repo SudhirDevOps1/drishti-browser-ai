@@ -1,0 +1,317 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" width="1600" height="600" preserveAspectRatio="xMidYMid meet" style="max-width:100%;height:auto;display:block" fill="none" role="img" aria-labelledby="bannerTitle bannerDesc">
+  <title id="bannerTitle">Drishti Browser AI — Premium Animated Banner</title>
+  <desc id="bannerDesc">A dark aurora banner with an animated glass browser mockup, live vision HUD, typing cursor and shimmer headline for an AI browser automation agent.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#030713"/>
+      <stop offset=".52" stop-color="#08142A"/>
+      <stop offset="1" stop-color="#111A3A"/>
+    </linearGradient>
+
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00F5FF"/>
+      <stop offset=".48" stop-color="#6685FF"/>
+      <stop offset="1" stop-color="#C06CFF"/>
+    </linearGradient>
+
+    <linearGradient id="accentSoft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00E5FF" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#B66CFF" stop-opacity=".9"/>
+    </linearGradient>
+
+    <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0D1B33" stop-opacity=".97"/>
+      <stop offset="1" stop-color="#070F22" stop-opacity=".97"/>
+    </linearGradient>
+
+    <radialGradient id="glowA">
+      <stop offset="0" stop-color="#00D9FF" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#00D9FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowB">
+      <stop offset="0" stop-color="#7C5CFF" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#7C5CFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowC">
+      <stop offset="0" stop-color="#00F5FF" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#00F5FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="tinyGlow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0"/>
+    </filter>
+
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M50 0H0V50" stroke="#64748B" stroke-opacity=".11" stroke-width="1"/>
+    </pattern>
+
+    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1" fill="#8FB6FF" fill-opacity=".12"/>
+    </pattern>
+
+    <clipPath id="browserClip">
+      <rect x="1000" y="90" width="510" height="424" rx="24"/>
+    </clipPath>
+
+    <clipPath id="screenClip">
+      <rect x="1024" y="166" width="462" height="320" rx="14"/>
+    </clipPath>
+
+    <mask id="headlineMask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="0" y="0" width="1600" height="600">
+      <rect width="1600" height="600" fill="#000"/>
+      <text x="95" y="317" class="heading" font-size="48" fill="#fff">Live Browser Vision</text>
+    </mask>
+  </defs>
+
+  <style>
+    .heading { font-family: Inter, "Segoe UI", Arial, sans-serif; font-weight: 800; }
+    .mono { font-family: "SFMono-Regular", Consolas, monospace; font-weight: 700; letter-spacing: 1px; }
+    .thin { font-family: "SFMono-Regular", Consolas, monospace; }
+
+    .float { animation: floatY 5.5s ease-in-out infinite; }
+    .floatSlow { animation: floatY 8s ease-in-out infinite reverse; }
+    .pulse { animation: pulse 2.6s ease-in-out infinite; }
+    .blink { animation: blink 3.4s ease-in-out infinite; }
+    .spin { transform-box: view-box; transform-origin: 1370px 315px; animation: spin 16s linear infinite; }
+    .spinRev { transform-box: view-box; transform-origin: 1370px 315px; animation: spinRev 11s linear infinite; }
+    .scan { animation: scan 4.6s ease-in-out infinite; }
+    .cursorFly { animation: cursorFly 5.2s cubic-bezier(.45,.05,.2,1) infinite; }
+    .dash { animation: dash 1.6s linear infinite; }
+    .shimmer { animation: shimmer 6.5s ease-in-out infinite; }
+    .caret { animation: caret 1.1s steps(1) infinite; }
+    .bar { transform-box: fill-box; transform-origin: left center; animation: bar 2.8s ease-in-out infinite; }
+    .bar2 { animation-delay: -.7s; }
+    .bar3 { animation-delay: -1.4s; }
+    .ripple { transform-box: fill-box; transform-origin: center; animation: ripple 2.6s ease-out infinite; }
+    .ripple2 { animation-delay: 1.3s; }
+    .aurora { animation: aurora 13s ease-in-out infinite alternate; }
+    .aurora2 { animation: aurora 17s ease-in-out infinite alternate-reverse; }
+    .beacon { animation: beacon 2.2s ease-in-out infinite; }
+
+    @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-11px); } }
+    @keyframes pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+    @keyframes blink { 0%,100% { opacity: .18; } 50% { opacity: 1; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spinRev { to { transform: rotate(-360deg); } }
+    @keyframes scan { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .95; } 88% { opacity: .95; } 100% { transform: translateY(292px); opacity: 0; } }
+    @keyframes cursorFly {
+      0% { transform: translate(0,0); opacity: 0; }
+      8% { opacity: 1; }
+      42% { transform: translate(-245px,-145px); }
+      54% { transform: translate(-245px,-145px); }
+      82% { transform: translate(0,0); opacity: 1; }
+      100% { transform: translate(0,0); opacity: 0; }
+    }
+    @keyframes dash { to { stroke-dashoffset: -60; } }
+    @keyframes shimmer { 0% { transform: translateX(-420px); } 100% { transform: translateX(980px); } }
+    @keyframes caret { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+    @keyframes bar { 0%,100% { transform: scaleX(.32); } 50% { transform: scaleX(1); } }
+    @keyframes ripple { 0% { transform: scale(.25); opacity: .85; } 100% { transform: scale(1.7); opacity: 0; } }
+    @keyframes aurora { from { transform: translateX(-28px) scale(1); opacity: .75; } to { transform: translateX(34px) scale(1.08); opacity: 1; } }
+    @keyframes beacon { 0%,100% { opacity: .25; r: 4; } 50% { opacity: 1; r: 7; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .float,.floatSlow,.pulse,.blink,.spin,.spinRev,.scan,.cursorFly,.dash,
+      .shimmer,.caret,.bar,.ripple,.aurora,.aurora2,.beacon { animation: none !important; }
+    }
+  </style>
+
+  <!-- ===== Background ===== -->
+  <rect width="1600" height="600" fill="url(#bg)"/>
+  <rect width="1600" height="600" fill="url(#grid)"/>
+  <rect width="1600" height="600" fill="url(#dots)" opacity=".35"/>
+
+  <g class="aurora">
+    <ellipse cx="1330" cy="292" rx="470" ry="350" fill="url(#glowA)"/>
+  </g>
+  <g class="aurora2">
+    <ellipse cx="250" cy="110" rx="360" ry="250" fill="url(#glowB)"/>
+    <ellipse cx="720" cy="560" rx="300" ry="170" fill="url(#glowC)"/>
+  </g>
+
+  <!-- aurora ribbons -->
+  <path d="M-60 470 C 320 350, 620 520, 980 360 S 1500 250, 1680 330"
+        stroke="url(#accentSoft)" stroke-width="46" stroke-opacity=".055" filter="url(#softGlow)"/>
+  <path d="M-40 130 C 300 250, 560 60, 900 180 S 1460 120, 1650 210"
+        stroke="#7C5CFF" stroke-width="34" stroke-opacity=".045" filter="url(#softGlow)"/>
+
+  <!-- ambient particles -->
+  <g fill="#00E5FF">
+    <circle class="blink" cx="872" cy="98" r="2"/>
+    <circle class="blink" cx="938" cy="452" r="3" style="animation-delay:-.8s"/>
+    <circle class="blink" cx="754" cy="522" r="2" style="animation-delay:-1.7s"/>
+    <circle class="blink" cx="1468" cy="64" r="2" style="animation-delay:-2.4s"/>
+    <circle class="blink" cx="1552" cy="470" r="3" style="animation-delay:-1.1s"/>
+    <circle class="blink" cx="812" cy="206" r="2" style="animation-delay:-3s"/>
+    <circle class="blink" cx="660" cy="88" r="2" style="animation-delay:-2s"/>
+  </g>
+
+  <!-- ===== Brand ===== -->
+  <g class="float">
+    <rect x="92" y="90" width="84" height="84" rx="24" fill="#0C1930" stroke="url(#accent)" stroke-width="2.4"/>
+    <rect x="99" y="97" width="70" height="70" rx="19" stroke="#00E5FF" stroke-opacity=".18"/>
+    <path d="M110 133 Q134 103 158 133 Q134 163 110 133Z" stroke="url(#accent)" stroke-width="3.4"/>
+    <circle cx="134" cy="133" r="13" stroke="#00E5FF" stroke-width="2.4" filter="url(#tinyGlow)"/>
+    <circle cx="134" cy="133" r="5" fill="#fff"/>
+    <circle cx="134" cy="133" r="2" fill="#00E5FF"/>
+  </g>
+
+  <text x="198" y="125" fill="#F8FAFC" class="heading" font-size="31" letter-spacing="2.2">DRISHTI BROWSER AI</text>
+  <text x="200" y="157" fill="#00E5FF" class="mono thin" font-size="12.5" letter-spacing=".6">दृष्टि • AI BROWSER VISION &amp; HUMAN MOTION</text>
+
+  <!-- status chip -->
+  <g>
+    <rect x="748" y="96" width="168" height="30" rx="15" fill="#0B1A30" stroke="#1C3552" stroke-opacity=".9"/>
+    <circle cx="768" cy="111" r="4.5" fill="#22C55E" class="pulse"/>
+    <text x="782" y="115" fill="#94A3B8" class="thin" font-size="11" letter-spacing="1.4">SYSTEM ONLINE</text>
+  </g>
+
+  <!-- ===== Headline ===== -->
+  <text x="95" y="252" fill="#F8FAFC" class="heading" font-size="49">Give Your AI Agent</text>
+
+  <text x="95" y="317" fill="url(#accent)" class="heading" font-size="48">Live Browser Vision</text>
+  <g mask="url(#headlineMask)">
+    <rect x="95" y="278" width="340" height="58" fill="url(#shimmer)" class="shimmer"/>
+  </g>
+
+  <text x="95" y="373" fill="#F8FAFC" class="heading" font-size="44">&amp; Human Motion</text>
+  <rect x="96" y="389" width="60" height="3" rx="1.5" fill="url(#accent)"/>
+
+  <text x="98" y="420" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18.5">
+    Universal AI Browser Automation • MCP • Chrome &amp; Brave
+  </text>
+
+  <!-- feature pills -->
+  <g>
+    <rect x="95" y="455" width="158" height="44" rx="13" fill="#0D1C32" stroke="#00D9FF" stroke-opacity=".5"/>
+    <circle cx="118" cy="477" r="3.5" fill="#00E5FF" class="beacon"/>
+    <text x="178" y="482" text-anchor="middle" fill="#00E5FF" class="mono" font-size="12.5">46 MCP TOOLS</text>
+
+    <rect x="267" y="455" width="212" height="44" rx="13" fill="#0D1C32" stroke="#64748B" stroke-opacity=".55"/>
+    <circle cx="290" cy="477" r="3.5" fill="#A78BFA" class="beacon" style="animation-delay:-.8s"/>
+    <text x="376" y="482" text-anchor="middle" fill="#E2E8F0" class="mono" font-size="11.5">SHADOW DOM CURSOR</text>
+
+    <rect x="493" y="455" width="180" height="44" rx="13" fill="#0D1C32" stroke="#A78BFA" stroke-opacity=".5"/>
+    <circle cx="516" cy="477" r="3.5" fill="#22C55E" class="beacon" style="animation-delay:-1.5s"/>
+    <text x="585" y="482" text-anchor="middle" fill="#C4B5FD" class="mono" font-size="12.5">127.0.0.1:7483</text>
+  </g>
+
+  <!-- ===== Browser mock ===== -->
+  <g class="floatSlow">
+    <rect x="998" y="88" width="514" height="428" rx="26" fill="#00E5FF" opacity=".09" filter="url(#softGlow)"/>
+    <rect x="1000" y="90" width="510" height="424" rx="24" fill="url(#card)" stroke="url(#accent)" stroke-opacity=".55" stroke-width="1.6"/>
+    <rect x="1001" y="91" width="508" height="1.4" rx="1" fill="#fff" opacity=".12"/>
+
+    <g clip-path="url(#browserClip)">
+      <!-- top bar -->
+      <rect x="1000" y="90" width="510" height="56" fill="#101E35"/>
+      <rect x="1000" y="145" width="510" height="1" fill="#22354F"/>
+
+      <circle cx="1030" cy="118" r="6" fill="#F87171"/>
+      <circle cx="1052" cy="118" r="6" fill="#FBBF24"/>
+      <circle cx="1074" cy="118" r="6" fill="#34D399"/>
+
+      <rect x="1100" y="104" width="356" height="28" rx="8" fill="#050D1B" stroke="#263B58"/>
+      <circle cx="1116" cy="118" r="4" fill="#22C55E" class="pulse"/>
+      <text x="1130" y="122" fill="#94A3B8" class="thin" font-size="11">target.app / automation</text>
+      <rect x="1130" y="124" width="118" height="1.5" fill="#00E5FF" class="caret" opacity=".8"/>
+
+      <!-- screen -->
+      <rect x="1024" y="166" width="462" height="320" rx="14" fill="#0D1930"/>
+
+      <g clip-path="url(#screenClip)">
+        <text x="1055" y="199" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">AI Browser Vision</text>
+        <text x="1055" y="222" fill="#64748B" class="thin" font-size="10.6" letter-spacing="1">DOM DETECTION • LIVE ELEMENT TRACKING</text>
+
+        <!-- target button -->
+        <rect x="1060" y="259" width="216" height="72" rx="14" fill="#102C46" stroke="#00E5FF" stroke-width="2" filter="url(#tinyGlow)"/>
+        <rect x="1060" y="242" width="116" height="20" rx="6" fill="#00E5FF"/>
+        <text x="1118" y="256" text-anchor="middle" fill="#06111E" class="mono" font-size="10" font-weight="800">TARGET DETECTED</text>
+        <text x="1168" y="302" text-anchor="middle" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">Submit</text>
+
+        <!-- click ripples on target -->
+        <circle cx="1168" cy="295" r="12" fill="none" stroke="#00E5FF" stroke-width="2" class="ripple"/>
+        <circle cx="1168" cy="295" r="12" fill="none" stroke="#00E5FF" stroke-width="1.5" class="ripple ripple2"/>
+
+        <!-- scan beam -->
+        <g class="scan">
+          <rect x="1030" y="166" width="450" height="3" rx="1.5" fill="#00E5FF" opacity=".95" filter="url(#softGlow)"/>
+        </g>
+
+        <!-- vision panel -->
+        <rect x="1300" y="259" width="158" height="153" rx="13" fill="#101E35" stroke="#334155"/>
+        <text x="1320" y="286" fill="#00E5FF" class="mono" font-size="11">VISION DATA</text>
+
+        <g>
+          <circle cx="1325" cy="313" r="4" fill="#22C55E"/>
+          <text x="1338" y="317" fill="#CBD5E1" class="thin" font-size="10">Detected</text>
+          <rect x="1320" y="323" width="118" height="3" rx="1.5" fill="#00E5FF" opacity=".22"/>
+          <rect x="1320" y="323" width="118" height="3" rx="1.5" fill="#00E5FF" class="bar"/>
+
+          <circle cx="1325" cy="350" r="4" fill="#00E5FF"/>
+          <text x="1338" y="354" fill="#CBD5E1" class="thin" font-size="10">Element</text>
+          <rect x="1320" y="360" width="118" height="3" rx="1.5" fill="#00E5FF" opacity=".22"/>
+          <rect x="1320" y="360" width="118" height="3" rx="1.5" fill="#6685FF" class="bar bar2"/>
+
+          <circle cx="1325" cy="387" r="4" fill="#A78BFA"/>
+          <text x="1338" y="391" fill="#CBD5E1" class="thin" font-size="10">Tracking</text>
+          <rect x="1320" y="397" width="118" height="3" rx="1.5" fill="#A78BFA" opacity=".22"/>
+          <rect x="1320" y="397" width="118" height="3" rx="1.5" fill="#C06CFF" class="bar bar3"/>
+        </g>
+
+        <!-- status bar -->
+        <rect x="1055" y="432" width="410" height="30" rx="8" fill="#091426" stroke="#24344D"/>
+        <circle cx="1073" cy="447" r="4" fill="#22C55E" class="pulse"/>
+        <text x="1085" y="451" fill="#94A3B8" class="thin" font-size="10" letter-spacing=".8">MCP CONNECTION ACTIVE</text>
+        <text x="1450" y="451" text-anchor="end" fill="#00E5FF" class="mono" font-size="10">LIVE</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ===== Vision HUD ===== -->
+  <g class="spin">
+    <circle cx="1370" cy="315" r="121" stroke="#00D9FF" stroke-opacity=".16" stroke-width="1.5" stroke-dasharray="5 10"/>
+    <circle cx="1370" cy="194" r="4.5" fill="#00E5FF" filter="url(#tinyGlow)"/>
+  </g>
+  <g class="spinRev">
+    <circle cx="1370" cy="315" r="96" stroke="#8B5CF6" stroke-opacity=".32" stroke-width="1.5" stroke-dasharray="3 9"/>
+    <circle cx="1370" cy="219" r="3.5" fill="#C06CFF" filter="url(#tinyGlow)"/>
+  </g>
+
+  <!-- cursor trail + cursor -->
+  <path d="M1462 438 Q1380 372 1216 294" stroke="url(#accent)" stroke-width="2.4"
+        stroke-dasharray="7 9" class="dash" opacity=".85"/>
+  <g class="cursorFly" filter="url(#softGlow)">
+    <path d="M1210 282 L1237 311 L1244 296 L1258 291 Z" fill="#00E5FF" stroke="#fff" stroke-width="1.4"/>
+  </g>
+
+  <!-- ===== Footer ===== -->
+  <rect x="95" y="548" width="1410" height="1.6" rx="1" fill="url(#accent)" opacity=".5"/>
+  <circle cx="95" cy="549" r="3" fill="#00E5FF" class="pulse" filter="url(#tinyGlow)"/>
+
+  <text x="96" y="575" fill="#64748B" class="mono" font-size="11" letter-spacing="2.4">SEE • UNDERSTAND • INTERACT • AUTOMATE</text>
+  <text x="1500" y="575" text-anchor="end" fill="#64748B" class="mono" font-size="11" letter-spacing="1.2">BUILT FOR UNIVERSAL AI AGENTS</text>
+
+  <!-- subtle film grain -->
+  <rect width="1600" height="600" filter="url(#grain)" opacity=".035" style="pointer-events:none"/>
+</svg>
