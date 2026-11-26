@@ -2123,6 +2123,7 @@ const interceptedDownloadUrls = new Set<string>();
 
 if (chrome.downloads?.onDeterminingFilename) {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    if (!pendingDownloadSubfolders.has(item.url)) return;
     const subfolder = pendingDownloadSubfolders.get(item.url) || 'drishti-downloads';
     pendingDownloadSubfolders.delete(item.url);
     const baseName = (item.filename || 'download.bin').split(/[/\\]/).pop() || 'download.bin';
@@ -2133,8 +2134,13 @@ if (chrome.downloads?.onDeterminingFilename) {
 
 if (chrome.downloads?.onCreated) {
   chrome.downloads.onCreated.addListener(async (item) => {
-    // Only intercept page-initiated http/https downloads when automation is active
-    if (item.byExtensionId === chrome.runtime.id) return;
+    // Never hijack downloads initiated by Drishti itself or any other extension
+    if (item.byExtensionId) return;
+    // Ignore historical/restored downloads fired when the browser or service worker starts
+    if (item.state !== 'in_progress') return;
+    const startedMs = item.startTime ? Date.parse(item.startTime) : 0;
+    if (!startedMs || Date.now() - startedMs > 10_000) return;
+
     const targetUrl = item.finalUrl || item.url;
     if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) return;
     if (interceptedDownloadUrls.has(targetUrl)) return;
@@ -2143,7 +2149,7 @@ if (chrome.downloads?.onCreated) {
       'automationEnabled',
       'autoSilentDownloads',
     ]);
-    if (automationEnabled === false || autoSilentDownloads === false) return;
+    if (automationEnabled === false || autoSilentDownloads !== true) return;
 
     interceptedDownloadUrls.add(targetUrl);
     setTimeout(() => interceptedDownloadUrls.delete(targetUrl), 10_000);
