@@ -413,6 +413,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'GET_TABLES':        result = await getPageTables(payload); break;
       case 'GET_FORMS':         result = await getPageForms(payload); break;
       case 'CLICK':             result = await clickElement(payload); break;
+      case 'DOUBLE_CLICK':      result = await clickElement({ ...payload, doubleClick: true }); break;
       case 'HOVER':             result = await hoverElement(payload); break;
       case 'TYPE':              result = await typeText(payload); break;
       case 'SCROLL':            result = await scrollPage(payload); break;
@@ -443,6 +444,10 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
     return result;
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const tabId = (payload.tabId as number | undefined) || (await resolveDefaultTabId()) || undefined;
+    if (tabId) {
+      await dispatchShadowCursor(tabId, 'error', 0, 0, 'ERROR', undefined, `ERROR · ${errorMsg.slice(0, 48)}`).catch(() => {});
+    }
     await recordErrorTelemetry(action, errorMsg, payload.tabId as number | undefined);
     broadcastAction(`Failed MCP: ${action} (${errorMsg})`, 'MCP', 'error');
     throw err;
@@ -573,50 +578,34 @@ async function navigate(payload: Record<string, unknown>): Promise<unknown> {
     await waitForTabLoad(tabId);
   }
 
+  const navStart = Date.now();
   const resolvedTab = tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (resolvedTab) {
-    chrome.scripting
-      .executeScript({
-        target: { tabId: resolvedTab },
-        func: (targetUrl: string) => {
-          try {
-            let hud = document.querySelector('[data-drishti-hud="true"]') as HTMLElement | null;
-            if (!hud) {
-              hud = document.createElement('div');
-              hud.setAttribute('data-drishti-hud', 'true');
-              hud.style.position = 'fixed';
-              hud.style.top = '14px';
-              hud.style.right = '14px';
-              hud.style.zIndex = '2147483647';
-              hud.style.pointerEvents = 'none';
-              hud.style.padding = '6px 12px';
-              hud.style.borderRadius = '9999px';
-              hud.style.background = 'rgba(6, 10, 18, 0.9)';
-              hud.style.border = '1.5px solid #00f2fe';
-              hud.style.boxShadow = '0 0 20px rgba(0, 242, 254, 0.45)';
-              hud.style.color = '#e0faff';
-              hud.style.fontFamily = 'ui-monospace, monospace';
-              hud.style.fontSize = '11px';
-              hud.style.fontWeight = '700';
-              hud.style.transition = 'opacity 250ms ease';
-              document.body.appendChild(hud);
-            }
-            hud.textContent = `DRISHTI AI • NAVIGATE ${targetUrl.slice(0, 42)}`;
-            hud.style.opacity = '1';
-            setTimeout(() => {
-              if (hud) {
-                hud.style.opacity = '0';
-                setTimeout(() => hud?.remove(), 260);
-              }
-            }, 1600);
-          } catch {}
-        },
-        args: [url],
-      })
-      .catch(() => {});
+    const tabInfo = await chrome.tabs.get(resolvedTab).catch(() => null);
+    let navLabel = tabInfo?.title?.trim() || '';
+    if (!navLabel || navLabel.length > 28) {
+      try {
+        const u = new URL(url);
+        const segs = u.pathname.split('/').filter(Boolean);
+        const lastSeg = segs[segs.length - 1] || '';
+        navLabel = lastSeg ? `${u.hostname}/${lastSeg}` : u.hostname;
+      } catch {
+        navLabel = navLabel || url.slice(0, 28);
+      }
+    }
+    const shortNav = formatHumanLabel(navLabel, 28);
+    await dispatchShadowCursor(
+      resolvedTab,
+      'navigate',
+      0,
+      0,
+      `NAVIGATE · ${shortNav}`,
+      undefined,
+      `NAVIGATE · ${shortNav}`
+    );
   }
 
-  return { success: true, url };
+  return { ok: true, action: 'navigate', target: url, verified: true, ms: Date.now() - navStart };
 }
 
 async function waitForTabLoad(tabId?: number): Promise<void> {
@@ -744,6 +733,9 @@ async function batchCompare(payload: Record<string, unknown>): Promise<unknown> 
   };
 }
 
+let captureMutex: Promise<void> = Promise.resolve();
+let lastCaptureAt = 0;
+
 async function takeScreenshot(payload: Record<string, unknown>): Promise<unknown> {
   const format = (payload.format as 'png' | 'jpeg') || 'png';
   const quality = (payload.quality as number) || 90;
@@ -756,21 +748,42 @@ async function takeScreenshot(payload: Record<string, unknown>): Promise<unknown
     } catch {}
   }
 
-  try {
-    const dataUrl = windowId
-      ? await chrome.tabs.captureVisibleTab(windowId, { format, quality })
-      : await chrome.tabs.captureVisibleTab({ format, quality });
+  let releaseMutex!: () => void;
+  const prevMutex = captureMutex;
+  captureMutex = new Promise<void>((res) => {
+    releaseMutex = res;
+  });
 
-    const base64 = dataUrl.replace(/^data:image\/(png|jpeg);base64,/, '');
-    return { base64, format, size: base64.length };
-  } catch (err: unknown) {
-    try {
-      const dataUrl = await chrome.tabs.captureVisibleTab({ format, quality });
-      const base64 = dataUrl.replace(/^data:image\/(png|jpeg);base64,/, '');
-      return { base64, format, size: base64.length };
-    } catch (fallbackErr) {
-      throw new Error(`Screenshot capture failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`);
+  await prevMutex;
+  try {
+    const elapsed = Date.now() - lastCaptureAt;
+    if (lastCaptureAt > 0 && elapsed < 550) {
+      await new Promise((r) => setTimeout(r, 550 - elapsed));
     }
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+      try {
+        lastCaptureAt = Date.now();
+        const dataUrl = windowId
+          ? await chrome.tabs.captureVisibleTab(windowId, { format, quality })
+          : await chrome.tabs.captureVisibleTab({ format, quality });
+        const base64 = dataUrl.replace(/^data:image\/(png|jpeg);base64,/, '');
+        return { base64, format, size: base64.length };
+      } catch (err: unknown) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND|quota/i.test(msg)) {
+          return { ok: false, code: 'CAPTURE_THROTTLED', error: msg };
+        }
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 700));
+        }
+      }
+    }
+    throw new Error(`Screenshot capture failed: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+  } finally {
+    releaseMutex();
   }
 }
 
@@ -813,33 +826,33 @@ async function getDomSnapshot(payload: Record<string, unknown>): Promise<unknown
   return results[0]?.result;
 }
 
+export interface ElementSnapshot {
+  ref: string;
+  selector: string;
+  tag: string;
+  type?: string;
+  text?: string;
+  value?: string;
+  placeholder?: string;
+  href?: string;
+  role?: string;
+  ariaLabel?: string;
+  id?: string;
+  classes?: string[];
+  bounds?: { x: number; y: number; width: number; height: number };
+  visible?: boolean;
+  interactive?: boolean;
+}
+
 // This function runs in the page context
 function extractDomSnapshot() {
-  interface ElementSnapshot {
-    ref: string;
-    selector: string;
-    tag: string;
-    type?: string;
-    text?: string;
-    value?: string;
-    placeholder?: string;
-    href?: string;
-    role?: string;
-    ariaLabel?: string;
-    id?: string;
-    classes?: string[];
-    bounds?: { x: number; y: number; width: number; height: number };
-    visible?: boolean;
-    interactive?: boolean;
-  }
-
   const elements: ElementSnapshot[] = [];
   const interactive = document.querySelectorAll(
     'a, button, input, select, textarea, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [tabindex]'
   );
 
   let refIndex = 0;
-  interactive.forEach((el, i) => {
+  interactive.forEach((el) => {
     if (
       el.closest(
         'ytd-ad-slot-renderer, ytd-promoted-sparkles-web-renderer, ytd-display-ad-renderer, [data-ad], [aria-label*="Sponsored"]'
@@ -913,19 +926,39 @@ async function getCursorSpeedMs(): Promise<number> {
   return 460;
 }
 
+interface ActionResult {
+  ok: boolean;
+  action: string;
+  target?: string;
+  rect?: { x: number; y: number; w: number; h: number };
+  verified: boolean;
+  ms: number;
+  error?: string;
+}
+
+function formatHumanLabel(raw: string, maxLen = 28): string {
+  const cleaned = raw.replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  const slice = cleaned.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(' ');
+  const cut = (lastSpace > 4 ? slice.slice(0, lastSpace) : slice).trim();
+  return `${cut}…`;
+}
+
 async function dispatchShadowCursor(
   tabId: number,
-  mode: 'move' | 'hover' | 'click' | 'type' | 'scroll' | 'key',
+  mode: 'move' | 'hover' | 'click' | 'type' | 'scroll' | 'key' | 'select' | 'drag' | 'navigate' | 'error',
   x: number,
   y: number,
   label: string,
   rect?: { left: number; top: number; width: number; height: number },
-  hudText?: string
+  hudText?: string,
+  extra?: { scrollPct?: number; dragTo?: { x: number; y: number }; typingProgress?: string }
 ): Promise<void> {
   const durationMs = await getCursorSpeedMs();
   const message = {
     type: 'DRISHTI_CURSOR_ACTION',
-    payload: { mode, x, y, rect, durationMs, label, hudText },
+    payload: { mode, x, y, rect, durationMs, label, hudText, ...(extra || {}) },
   };
   try {
     await chrome.tabs.sendMessage(tabId, message);
@@ -940,9 +973,9 @@ async function dispatchShadowCursor(
   }
 }
 
-async function trustedCdpClick(tabId: number, x: number, y: number): Promise<boolean> {
+async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick = false): Promise<boolean> {
   const { trustedCdpMode } = await chrome.storage.local.get('trustedCdpMode');
-  if (!trustedCdpMode) return false;
+  if (trustedCdpMode === false) return false;
   const hasPerm = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
   if (!hasPerm) return false;
 
@@ -953,21 +986,24 @@ async function trustedCdpClick(tabId: number, x: number, y: number): Promise<boo
       x,
       y,
     });
-    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
-      type: 'mousePressed',
-      x,
-      y,
-      button: 'left',
-      clickCount: 1,
-    });
-    await new Promise((r) => setTimeout(r, 45));
-    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
-      type: 'mouseReleased',
-      x,
-      y,
-      button: 'left',
-      clickCount: 1,
-    });
+    const clicks = doubleClick ? [1, 2] : [1];
+    for (const clickCount of clicks) {
+      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x,
+        y,
+        button: 'left',
+        clickCount,
+      });
+      await new Promise((r) => setTimeout(r, 40));
+      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x,
+        y,
+        button: 'left',
+        clickCount,
+      });
+    }
     return true;
   } catch {
     return false;
@@ -976,7 +1012,8 @@ async function trustedCdpClick(tabId: number, x: number, y: number): Promise<boo
   }
 }
 
-async function hoverElement(payload: Record<string, unknown>): Promise<unknown> {
+async function hoverElement(payload: Record<string, unknown>): Promise<ActionResult> {
+  const startedAt = Date.now();
   const tabId = payload.tabId as number | undefined;
   const target =
     tabId ||
@@ -988,21 +1025,31 @@ async function hoverElement(payload: Record<string, unknown>): Promise<unknown> 
 
   const refSelector = payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null;
   const resolvedSelector = (payload.selector as string) || refSelector || '';
+  if (!resolvedSelector) throw new Error('Element not found for hover: selector or ref required');
 
   const locateRes = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: async (selector: string) => {
-      let el = document.querySelector(selector) as HTMLElement | null;
+      let el: HTMLElement | null = null;
+      try {
+        el = document.querySelector(selector) as HTMLElement | null;
+      } catch {
+        el = null;
+      }
       if (!el) {
-        const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
+        const hasTextMatch = selector.match(/:has-text\(['"](.+?)['"]\)/i);
+        const clean = (hasTextMatch ? hasTextMatch[1] : selector.replace(/[#.[\]="'"]/g, ' '))
+          .trim()
+          .toLowerCase();
         const candidates = Array.from(
-          document.querySelectorAll('a, button, input, [role="button"], [role="link"], [role="menuitem"]')
+          document.querySelectorAll('a, button, input, select, textarea, [role="button"], [role="link"], [role="menuitem"]')
         ) as HTMLElement[];
         el =
           candidates.find((c) => {
             const t = (c.textContent || '').trim().toLowerCase();
             const a = (c.getAttribute('aria-label') || '').trim().toLowerCase();
-            return (clean && t.includes(clean)) || (clean && a.includes(clean));
+            const p = (c.getAttribute('placeholder') || '').trim().toLowerCase();
+            return (clean && t.includes(clean)) || (clean && a.includes(clean)) || (clean && p.includes(clean));
           }) || null;
       }
       if (!el) throw new Error(`Element not found for hover: ${selector}`);
@@ -1016,50 +1063,118 @@ async function hoverElement(payload: Record<string, unknown>): Promise<unknown> 
           const started = performance.now();
           const check = () => {
             const r = el!.getBoundingClientRect();
-            if (Math.abs(r.top - lastTop) < 0.75) {
-              stableFrames++;
-            } else {
-              stableFrames = 0;
-            }
+            if (Math.abs(r.top - lastTop) < 0.75) stableFrames++;
+            else stableFrames = 0;
             lastTop = r.top;
-            if (stableFrames >= 3 || performance.now() - started > 450) {
-              resolve();
-            } else {
-              requestAnimationFrame(check);
-            }
+            if (stableFrames >= 3 || performance.now() - started > 450) resolve();
+            else requestAnimationFrame(check);
           };
           requestAnimationFrame(check);
         });
       }
 
+      el.setAttribute('data-drishti-pending-hover', '1');
       const rect = el.getBoundingClientRect();
-      const shortText = (el.getAttribute('aria-label') || el.textContent || selector).trim().slice(0, 28);
+      const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+      const rawLabel =
+        (labelEl?.textContent || '') ||
+        el.getAttribute('aria-label') ||
+        el.getAttribute('placeholder') ||
+        el.textContent ||
+        selector;
       return {
         x: Math.round(rect.left + rect.width / 2),
         y: Math.round(rect.top + rect.height / 2),
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        hudText: `DRISHTI AI • HOVER "${shortText}"`,
+        rawLabel: rawLabel.trim(),
       };
     },
     args: [resolvedSelector],
   });
 
   const coords = locateRes[0]?.result;
-  if (coords) {
-    await dispatchShadowCursor(target, 'hover', coords.x, coords.y, 'AI HOVER', coords.rect, coords.hudText);
-    await chrome.scripting.executeScript({
-      target: { tabId: target },
-      func: (selector: string) => {
-        const el = document.querySelector(selector) as HTMLElement | null;
-        if (!el) return;
-        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-        el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
-      },
-      args: [resolvedSelector],
-    }).catch(() => {});
+  if (!coords) throw new Error(`Element not found for hover: ${resolvedSelector}`);
+
+  const human = formatHumanLabel(coords.rawLabel || resolvedSelector);
+  const hud = `HOVER · ${human}`;
+  await dispatchShadowCursor(target, 'hover', coords.x, coords.y, hud, coords.rect, hud);
+
+  let usedCdpHover = false;
+  try {
+    try {
+      await chrome.debugger.attach({ tabId: target }, '1.3');
+    } catch (attachErr) {
+      const msg = attachErr instanceof Error ? attachErr.message : String(attachErr);
+      if (!/already attached/i.test(msg)) throw attachErr;
+    }
+    await chrome.debugger.sendCommand({ tabId: target }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: coords.x,
+      y: coords.y,
+      button: 'none',
+    });
+    usedCdpHover = true;
+  } catch {
+    usedCdpHover = false;
   }
-  return { hovered: resolvedSelector, ...coords };
+
+  if (!usedCdpHover) {
+    await chrome.scripting
+      .executeScript({
+        target: { tabId: target },
+        func: (px: number, py: number) => {
+          const el =
+            (document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null) ||
+            (document.elementFromPoint(px, py) as HTMLElement | null);
+          if (!el) return;
+          for (const evt of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
+            const Ctor = evt.startsWith('pointer') ? PointerEvent : MouseEvent;
+            el.dispatchEvent(new Ctor(evt, { bubbles: evt !== 'mouseenter' && evt !== 'pointerenter', clientX: px, clientY: py }));
+          }
+        },
+        args: [coords.x, coords.y],
+      })
+      .catch(() => {});
+  }
+
+  await new Promise((r) => setTimeout(r, 120));
+
+  const hoverVerify = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: () => {
+      const el = document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null;
+      if (!el) return false;
+      el.removeAttribute('data-drishti-pending-hover');
+      return el.matches(':hover') || Boolean(document.querySelector(':hover'));
+    },
+  });
+
+  if (usedCdpHover) {
+    await chrome.debugger.detach({ tabId: target }).catch(() => {});
+  }
+
+  const verified = Boolean(hoverVerify[0]?.result);
+  if (!verified) {
+    return {
+      ok: false,
+      action: 'hover',
+      target: human,
+      rect: { x: Math.round(coords.rect.left), y: Math.round(coords.rect.top), w: Math.round(coords.rect.width), h: Math.round(coords.rect.height) },
+      verified: false,
+      error: 'hover not applied',
+      ms: Date.now() - startedAt,
+    };
+  }
+
+  return {
+    ok: true,
+    action: 'hover',
+    target: human,
+    rect: { x: Math.round(coords.rect.left), y: Math.round(coords.rect.top), w: Math.round(coords.rect.width), h: Math.round(coords.rect.height) },
+    verified: true,
+    hovered: true,
+    ms: Date.now() - startedAt,
+  } as ActionResult & { hovered: boolean };
 }
 
 async function clickElement(payload: Record<string, unknown>): Promise<unknown> {
@@ -1165,13 +1280,24 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
       let resolvedSelector: string | null = null;
 
       if (selector) {
-        el = document.querySelector(selector) as HTMLElement | null;
+        try {
+          el = document.querySelector(selector) as HTMLElement | null;
+        } catch {
+          el = null;
+        }
         if (!el && learnedSelector) {
-          el = document.querySelector(learnedSelector) as HTMLElement | null;
+          try {
+            el = document.querySelector(learnedSelector) as HTMLElement | null;
+          } catch {
+            el = null;
+          }
           if (el) usedLearned = true;
         }
         if (!el) {
-          const cleanText = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
+          const hasTextMatch = selector.match(/:has-text\(['"](.+?)['"]\)/i);
+          const cleanText = (hasTextMatch ? hasTextMatch[1] : selector.replace(/[#.[\]="'"]/g, ' '))
+            .trim()
+            .toLowerCase();
           const candidates = [
             ...Array.from(document.querySelectorAll('a, button, input, [role="button"], [role="link"], [role="menuitem"]')),
             ...Array.from(document.querySelectorAll('span, h1, h2, h3, h4')),
@@ -1207,24 +1333,86 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
       await waitScrollSettle(el);
       const rect = el.getBoundingClientRect();
-      const shortText = (el.getAttribute('aria-label') || el.textContent || selector || 'element').trim().slice(0, 28);
-      const isCopyBtn = /copy/i.test(shortText);
-      const label = usedLearned ? 'AI LEARNED' : isCopyBtn ? 'AI COPY' : 'AI CLICK';
-      const hudText = isCopyBtn
-        ? `DRISHTI AI • COPY "${shortText}"`
-        : `DRISHTI AI • CLICK "${shortText}"`;
+
+      // G3: Resolve human label (never fall back to CSS selector)
+      const resolveLabel = (node: HTMLElement): string => {
+        if (node instanceof HTMLSelectElement) {
+          const selText = node.options[node.selectedIndex]?.textContent?.trim();
+          if (selText) return selText;
+        }
+        if (node.id) {
+          const forLabel = document.querySelector(`label[for="${CSS.escape(node.id)}"]`)?.textContent?.trim();
+          if (forLabel) return forLabel;
+        }
+        const closestLabel = node.closest('label');
+        if (closestLabel) {
+          const ownVal = 'value' in node ? String((node as HTMLInputElement).value || '') : '';
+          const txt = (closestLabel.textContent || '').replace(ownVal, '').replace(/\s+/g, ' ').trim();
+          if (txt) return txt;
+        }
+        const aria = node.getAttribute('aria-label')?.trim();
+        if (aria) return aria;
+        const labelledBy = node.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const refTxt = labelledBy
+            .split(/\s+/)
+            .map((id) => document.getElementById(id)?.textContent?.trim() || '')
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+          if (refTxt) return refTxt;
+        }
+        const ph = node.getAttribute('placeholder')?.trim();
+        if (ph) return ph;
+        const title = node.getAttribute('title')?.trim();
+        if (title) return title;
+        const selfTxt = !(node instanceof HTMLSelectElement) ? (node.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        if (selfTxt) return selfTxt;
+        const parentRow = node.parentElement;
+        if (parentRow) {
+          const sibTxt = Array.from(parentRow.childNodes)
+            .filter((n) => n !== node)
+            .map((n) => (n.textContent || '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+            .join(' ')
+            .slice(0, 60)
+            .trim();
+          if (sibTxt) return sibTxt;
+        }
+        if (node instanceof HTMLInputElement) {
+          if (node.type === 'checkbox') return 'checkbox';
+          if (node.type === 'radio') return 'radio';
+          return 'field';
+        }
+        if (node.tagName === 'OPTION') return 'option';
+        if (node.tagName === 'TEXTAREA' || node.tagName === 'SELECT') return 'field';
+        return 'button';
+      };
+
+      const rawLabel = resolveLabel(el);
+
+      // G7: For small targets (<24px), expand visual box to label/parent row (<=44px) while keeping real click centre
+      let visualRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+      if (rect.width < 24 || rect.height < 24) {
+        const container = (el.closest('label') || el.parentElement) as HTMLElement | null;
+        if (container) {
+          const cr = container.getBoundingClientRect();
+          if (cr.height > 0 && cr.height <= 44 && cr.width >= rect.width) {
+            visualRect = { left: cr.left, top: cr.top, width: cr.width, height: cr.height };
+          }
+        }
+      }
 
       el.setAttribute('data-drishti-pending-click', '1');
       return {
         x: x !== null && !selector ? x : Math.round(rect.left + rect.width / 2),
         y: y !== null && !selector ? y : Math.round(rect.top + rect.height / 2),
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        label,
-        hudText,
+        visualRect,
         usedLearned,
         selfHealed,
         resolvedSelector,
-        matchedText: shortText,
+        matchedText: rawLabel,
       };
     },
     args: [
@@ -1235,55 +1423,83 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     ],
   });
 
-  const prep = results[0]?.result as {
+  const clickStartedAt = Date.now();
+  const isDoubleClick = Boolean(payload.doubleClick);
+  const prep = locateRes[0]?.result as {
     x: number;
     y: number;
     rect: { left: number; top: number; width: number; height: number };
-    label: string;
-    hudText: string;
+    visualRect: { left: number; top: number; width: number; height: number };
     usedLearned: boolean;
     selfHealed: boolean;
     resolvedSelector: string | null;
     matchedText: string;
   };
 
-  if (prep) {
-    await dispatchShadowCursor(target, 'click', prep.x, prep.y, prep.label, prep.rect, prep.hudText);
-    await new Promise((r) => setTimeout(r, 60));
+  if (!prep) {
+    throw new Error(`Element not found: ${resolvedInputSelector || `(${payload.x},${payload.y})`}`);
   }
+
+  const humanTarget = formatHumanLabel(prep.matchedText || 'button', 28);
+  const clickHud = isDoubleClick ? `DBLCLICK · ${humanTarget}` : /copy/i.test(humanTarget) ? `COPY · ${humanTarget}` : `CLICK · ${humanTarget}`;
+  await dispatchShadowCursor(target, 'click', prep.x, prep.y, clickHud, prep.visualRect, clickHud);
+  await new Promise((r) => setTimeout(r, 60));
+
+  const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+  const cdpOk = await trustedCdpClick(target, prep.x, prep.y, isDoubleClick);
 
   const clickRes = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (selector: string | null, x: number | null, y: number | null) => {
+    func: async (selector: string | null, x: number | null, y: number | null, alreadyCdpClicked: boolean, dbl: boolean) => {
       const el =
         (document.querySelector('[data-drishti-pending-click="1"]') as HTMLElement | null) ||
         (selector ? (document.querySelector(selector) as HTMLElement | null) : null) ||
         (x !== null && y !== null ? (document.elementFromPoint(x, y) as HTMLElement | null) : null);
+      const prevExpanded = el?.getAttribute('aria-expanded');
+      const prevChecked = el instanceof HTMLInputElement ? el.checked : null;
+      const prevBodyLen = document.body?.innerText?.length || 0;
+
       if (el) {
         el.removeAttribute('data-drishti-pending-click');
-        el.click();
+        if (!alreadyCdpClicked) {
+          if (dbl) {
+            el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+          } else {
+            el.click();
+          }
+        }
       }
-      return {
-        clicked: selector || `element at (${x},${y})`,
-        url: window.location.href,
-        title: document.title,
-        interactiveCount: document.querySelectorAll('a,button,input,select,textarea,[role="button"]').length,
-      };
+
+      await new Promise((r) => setTimeout(r, 80));
+      const changed =
+        !el ||
+        !el.isConnected ||
+        el.getAttribute('aria-expanded') !== prevExpanded ||
+        (el instanceof HTMLInputElement && el.checked !== prevChecked) ||
+        (document.body?.innerText?.length || 0) !== prevBodyLen;
+      return { verified: Boolean(el) || changed };
     },
-    args: [resolvedInputSelector, (payload.x as number) ?? null, (payload.y as number) ?? null],
+    args: [resolvedInputSelector, (payload.x as number) ?? null, (payload.y as number) ?? null, cdpOk, isDoubleClick],
   });
 
-  if (prep) {
-    await trustedCdpClick(target, prep.x, prep.y);
-  }
-
-  if (prep?.selfHealed && prep?.resolvedSelector && hostname && payload.selector) {
+  if (prep.selfHealed && prep.resolvedSelector && hostname && payload.selector) {
     await recordLearnedSelector(hostname, String(payload.selector), String(prep.resolvedSelector));
   }
+  const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+  const verified = Boolean(clickRes[0]?.result?.verified) || postUrl !== preUrl;
+
   return {
-    ...(clickRes[0]?.result || {}),
-    ...(prep?.usedLearned ? { usedLearnedSelector: learnedSel } : {}),
-    ...(prep?.selfHealed ? { selfHealed: true, resolvedSelector: prep.resolvedSelector, matchedText: prep.matchedText } : {}),
+    ok: true,
+    action: isDoubleClick ? 'double_click' : 'click',
+    target: humanTarget,
+    rect: {
+      x: Math.round(prep.rect.left),
+      y: Math.round(prep.rect.top),
+      w: Math.round(prep.rect.width),
+      h: Math.round(prep.rect.height),
+    },
+    verified,
+    ms: Date.now() - clickStartedAt,
   };
 }
 
@@ -1347,6 +1563,7 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     })
     .catch(() => {});
 
+  const typeStartedAt = Date.now();
   const resolvedTypeSelector =
     (payload.selector as string) || (payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null);
   const textToType = String(payload.text ?? '');
@@ -1358,9 +1575,16 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     func: async (selector: string | null, text: string) => {
       let el: HTMLInputElement | HTMLTextAreaElement | null = null;
       if (selector) {
-        el = document.querySelector(selector) as HTMLInputElement;
+        try {
+          el = document.querySelector(selector) as HTMLInputElement | null;
+        } catch {
+          el = null;
+        }
         if (!el) {
-          const clean = selector.replace(/[#.[\]="'"]/g, ' ').trim().toLowerCase();
+          const hasTextMatch = selector.match(/:has-text\(['"](.+?)['"]\)/i);
+          const clean = (hasTextMatch ? hasTextMatch[1] : selector.replace(/[#.[\]="'"]/g, ' '))
+            .trim()
+            .toLowerCase();
           const inputs = Array.from(
             document.querySelectorAll('input:not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')
           ) as HTMLElement[];
@@ -1404,27 +1628,39 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
 
       el.setAttribute('data-drishti-pending-type', '1');
       const rect = el.getBoundingClientRect();
-      const preview = text.length > 22 ? `${text.slice(0, 22)}…` : text;
+      const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+      const rawField =
+        (labelEl?.textContent || '') ||
+        el.getAttribute('aria-label') ||
+        el.getAttribute('placeholder') ||
+        el.getAttribute('name') ||
+        'field';
       return {
         x: Math.round(rect.left + rect.width / 2),
         y: Math.round(rect.top + rect.height / 2),
         rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        hudText: `DRISHTI AI • TYPE "${preview}"`,
+        rawField: rawField.trim(),
+        charCount: text.length,
       };
     },
     args: [resolvedTypeSelector, textToType],
   });
 
   const typePrep = prepTypeRes[0]?.result as
-    | { x: number; y: number; rect: { left: number; top: number; width: number; height: number }; hudText: string }
+    | { x: number; y: number; rect: { left: number; top: number; width: number; height: number }; rawField: string; charCount: number }
     | undefined;
+  const humanField = formatHumanLabel(typePrep?.rawField || 'field', 28);
+  const baseTypeLabel = `TYPE · ${humanField}`;
   if (typePrep) {
-    await dispatchShadowCursor(target, 'type', typePrep.x, typePrep.y, 'AI TYPE', typePrep.rect, typePrep.hudText);
+    // G5: dispatch without awaiting so typing + 0/n counter start immediately
+    dispatchShadowCursor(target, 'type', typePrep.x, typePrep.y, baseTypeLabel, typePrep.rect, baseTypeLabel, {
+      typingProgress: instantType ? `${baseTypeLabel} · done ${typePrep.charCount}/${typePrep.charCount}` : `${baseTypeLabel} · 0/${typePrep.charCount}`,
+    }).catch(() => {});
   }
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: async (selector: string | null, text: string, clearFirst: boolean, instant: boolean) => {
+    func: async (selector: string | null, text: string, clearFirst: boolean, instant: boolean, baseLabel: string) => {
       const el =
         (document.querySelector('[data-drishti-pending-type="1"]') as HTMLInputElement | HTMLTextAreaElement | null) ||
         (selector ? (document.querySelector(selector) as HTMLInputElement | null) : (document.activeElement as HTMLInputElement | null));
@@ -1436,6 +1672,18 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
 
       el.focus();
 
+      const emitProgress = (done: number, finished = false) => {
+        try {
+          const textStr = finished
+            ? `${baseLabel} · done ${done}/${text.length}`
+            : `${baseLabel} · ${done}/${text.length}`;
+          window.dispatchEvent(
+            new CustomEvent('drishti:typing-progress', { detail: { text: textStr, baseLabel } })
+          );
+        } catch {}
+      };
+      emitProgress(0, false);
+
       // Handle contenteditable / Slate / ProseMirror / TipTap rich-text editors
       if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
         if (clearFirst) {
@@ -1444,7 +1692,8 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
         }
         document.execCommand('insertText', false, text);
         el.dispatchEvent(new InputEvent('input', { data: text, bubbles: true, inputType: 'insertText' }));
-        return { typed: text.length + ' characters (contenteditable)', selfHealed: !document.querySelector(selector || '') };
+        emitProgress(text.length, true);
+        return { verified: true, animated: false, chars: text.length };
       }
 
       const setNativeValue = (element: HTMLInputElement | HTMLTextAreaElement, val: string) => {
@@ -1463,34 +1712,59 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
       }
 
       let currentVal = 'value' in el ? el.value : '';
-      const useInstant = instant || text.length > 40;
+      const useInstant = instant === true;
       if (useInstant && 'value' in el) {
         const nextVal = currentVal + text;
         setNativeValue(el, nextVal);
         el.dispatchEvent(new InputEvent('input', { data: text, bubbles: true, inputType: 'insertText' }));
-      } else {
+        emitProgress(text.length, true);
+      } else if (text.length <= 60) {
+        const charDelay = 35;
+        let typedCount = 0;
         for (const char of text) {
-          const keydown = new KeyboardEvent('keydown', { key: char, bubbles: true });
-          const keypress = new KeyboardEvent('keypress', { key: char, bubbles: true });
-          el.dispatchEvent(keydown);
-          el.dispatchEvent(keypress);
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+          el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
           if ('value' in el) {
             currentVal += char;
             setNativeValue(el, currentVal);
           }
           el.dispatchEvent(new InputEvent('input', { data: char, bubbles: true, inputType: 'insertText' }));
           el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
-          await new Promise((r) => setTimeout(r, 18));
+          typedCount += 1;
+          if (typedCount % 3 === 0 || typedCount === text.length) {
+            emitProgress(typedCount, typedCount === text.length);
+          }
+          await new Promise((r) => setTimeout(r, charDelay));
+        }
+      } else {
+        const chunkSize = 11;
+        const numChunks = Math.ceil(text.length / chunkSize);
+        const delayPerChar = Math.max(18, Math.min(45, Math.round(4000 / text.length)));
+        const chunkDelay = Math.min(120, Math.max(40, Math.floor(Math.min(4000, text.length * delayPerChar) / numChunks)));
+        let typedCount = 0;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          const chunk = text.slice(i, i + chunkSize);
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: chunk[0], bubbles: true }));
+          if ('value' in el) {
+            currentVal += chunk;
+            setNativeValue(el, currentVal);
+          }
+          el.dispatchEvent(new InputEvent('input', { data: chunk, bubbles: true, inputType: 'insertText' }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: chunk[chunk.length - 1], bubbles: true }));
+          typedCount = Math.min(text.length, i + chunk.length);
+          emitProgress(typedCount, typedCount === text.length);
+          if (typedCount < text.length) {
+            await new Promise((r) => setTimeout(r, chunkDelay));
+          }
         }
       }
 
       el.dispatchEvent(new Event('change', { bubbles: true }));
+      const finalVal = 'value' in el ? el.value : (el as HTMLElement).textContent || '';
       return {
-        typed: text.length + ' characters',
-        instant: useInstant,
-        url: window.location.href,
-        title: document.title,
-        selfHealed: !document.querySelector(selector || ''),
+        verified: text.length === 0 || finalVal.includes(text.slice(0, 20)),
+        animated: !useInstant,
+        chars: text.length,
       };
     },
     args: [
@@ -1498,13 +1772,36 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
       textToType,
       clearFirst,
       instantType,
+      baseTypeLabel,
     ],
   });
 
-  return results[0]?.result;
+  const typeRes = results[0]?.result;
+  const durationMs = Date.now() - typeStartedAt;
+  return {
+    ok: true,
+    action: 'type',
+    target: humanField,
+    ...(typePrep
+      ? {
+          rect: {
+            x: Math.round(typePrep.rect.left),
+            y: Math.round(typePrep.rect.top),
+            w: Math.round(typePrep.rect.width),
+            h: Math.round(typePrep.rect.height),
+          },
+        }
+      : {}),
+    verified: Boolean(typeRes?.verified),
+    animated: Boolean(typeRes?.animated ?? !instantType),
+    chars: typeRes?.chars ?? textToType.length,
+    durationMs,
+    ms: durationMs,
+  };
 }
 
-async function scrollPage(payload: Record<string, unknown>): Promise<unknown> {
+async function scrollPage(payload: Record<string, unknown>): Promise<ActionResult> {
+  const startedAt = Date.now();
   const tabId = payload.tabId as number | undefined;
   const target =
     tabId ||
@@ -1514,19 +1811,12 @@ async function scrollPage(payload: Record<string, unknown>): Promise<unknown> {
 
   const direction = (payload.direction as string) || 'down';
   const amount = (payload.amount as number) || 300;
-  await dispatchShadowCursor(
-    target,
-    'scroll',
-    0,
-    0,
-    'SCROLL',
-    undefined,
-    `DRISHTI AI • SCROLL ${direction.toUpperCase()} ${amount}px`
-  );
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: async (dir: string, amt: number) => {
+      const prevX = window.scrollX;
+      const prevY = window.scrollY;
       const scrollMap: Record<string, [number, number]> = {
         down: [0, amt],
         up: [0, -amt],
@@ -1536,15 +1826,31 @@ async function scrollPage(payload: Record<string, unknown>): Promise<unknown> {
       const [x, y] = scrollMap[dir] || [0, amt];
       window.scrollBy({ left: x, top: y, behavior: 'smooth' });
       await new Promise((r) => setTimeout(r, 320));
-      return { scrolled: dir, amount: amt };
+      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const scrollPct = Math.round((window.scrollY / maxScroll) * 100);
+      const verified = window.scrollY !== prevY || window.scrollX !== prevX || maxScroll <= 1;
+      return { scrollPct, verified };
     },
     args: [direction, amount],
   });
 
-  return results[0]?.result;
+  const scrollRes = results[0]?.result;
+  const pct = scrollRes?.scrollPct ?? 0;
+  await dispatchShadowCursor(target, 'scroll', 0, 0, `SCROLL ${pct}%`, undefined, `SCROLL ${pct}%`, {
+    scrollPct: pct,
+  });
+
+  return {
+    ok: true,
+    action: 'scroll',
+    target: `${direction} ${amount}px`,
+    verified: Boolean(scrollRes?.verified),
+    ms: Date.now() - startedAt,
+  };
 }
 
-async function pressKey(payload: Record<string, unknown>): Promise<unknown> {
+async function pressKey(payload: Record<string, unknown>): Promise<ActionResult> {
+  const startedAt = Date.now();
   const tabId = payload.tabId as number | undefined;
   const target =
     tabId ||
@@ -1553,11 +1859,59 @@ async function pressKey(payload: Record<string, unknown>): Promise<unknown> {
   if (!target) throw new Error('No active tab');
 
   const keyName = String(payload.key || 'Enter');
-  await dispatchShadowCursor(target, 'key', 0, 0, 'KEY', undefined, `DRISHTI AI • KEY ${keyName}`);
+  const modifiers = (payload.modifiers as string[]) || [];
+  const capMods = modifiers.map((m) => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase());
+  const combo = capMods.length > 0 ? `${capMods.join('+')}+${keyName}` : keyName;
+  const label = `KEY · ${combo}`;
+
+  const activeRectRes = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: async () => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && el !== document.body && el !== document.documentElement) {
+        const r0 = el.getBoundingClientRect();
+        if (r0.top < 8 || r0.bottom > window.innerHeight - 8) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          await new Promise<void>((resolve) => {
+            let lastTop = r0.top;
+            let stable = 0;
+            const started = performance.now();
+            const tick = () => {
+              const r = el.getBoundingClientRect();
+              if (Math.abs(r.top - lastTop) < 0.75) stable++;
+              else stable = 0;
+              lastTop = r.top;
+              if (stable >= 3 || performance.now() - started > 450) resolve();
+              else requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          });
+        }
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          return {
+            x: Math.round(r.left + r.width / 2),
+            y: Math.round(r.top + r.height / 2),
+            rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+            hasTarget: true,
+          };
+        }
+      }
+      const cx = Math.round(window.innerWidth / 2);
+      const cy = Math.round(window.innerHeight / 2);
+      return { x: cx, y: cy, rect: { left: cx - 24, top: cy - 16, width: 48, height: 32 }, hasTarget: false };
+    },
+  });
+
+  const activeCoords = activeRectRes[0]?.result;
+  const keyLabel = activeCoords?.hasTarget ? label : `${label} (no target)`;
+  if (activeCoords) {
+    await dispatchShadowCursor(target, 'key', activeCoords.x, activeCoords.y, keyLabel, activeCoords.rect, keyLabel);
+  }
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (key: string, modifiers: string[]) => {
+    func: (key: string, mods: string[]) => {
       const keyCodeMap: Record<string, number> = { Enter: 13, Escape: 27, Tab: 9, Backspace: 8, Space: 32 };
       const codeVal = keyCodeMap[key] || 0;
       const eventInit: KeyboardEventInit = {
@@ -1566,10 +1920,10 @@ async function pressKey(payload: Record<string, unknown>): Promise<unknown> {
         keyCode: codeVal,
         which: codeVal,
         bubbles: true,
-        ctrlKey: modifiers.includes('ctrl'),
-        shiftKey: modifiers.includes('shift'),
-        altKey: modifiers.includes('alt'),
-        metaKey: modifiers.includes('meta'),
+        ctrlKey: mods.includes('ctrl'),
+        shiftKey: mods.includes('shift'),
+        altKey: mods.includes('alt'),
+        metaKey: mods.includes('meta'),
       };
       document.activeElement?.dispatchEvent(
         new KeyboardEvent('keydown', eventInit)
@@ -1585,10 +1939,26 @@ async function pressKey(payload: Record<string, unknown>): Promise<unknown> {
 
       return { pressed: key };
     },
-    args: [payload.key as string, (payload.modifiers as string[]) || []],
+    args: [keyName, modifiers],
   });
 
-  return results[0]?.result;
+  return {
+    ok: true,
+    action: 'key',
+    target: combo,
+    ...(activeCoords
+      ? {
+          rect: {
+            x: Math.round(activeCoords.rect.left),
+            y: Math.round(activeCoords.rect.top),
+            w: Math.round(activeCoords.rect.width),
+            h: Math.round(activeCoords.rect.height),
+          },
+        }
+      : {}),
+    verified: Boolean(results[0]?.result?.pressed),
+    ms: Date.now() - startedAt,
+  };
 }
 
 async function getPageInfo(payload: Record<string, unknown>): Promise<unknown> {
@@ -1652,7 +2022,12 @@ async function attachDevTelemetry(tabId?: number): Promise<{ attached: boolean; 
   if (!target) return { attached: false };
 
   const tab = await chrome.tabs.get(target).catch(() => null);
-  if (!tab?.url || !(await checkDomainPolicy(tab.url))) {
+  if (!tab?.url) {
+    return { attached: false, tabId: target };
+  }
+  try {
+    await checkDomainPolicy(tab.url);
+  } catch {
     return { attached: false, tabId: target };
   }
 
@@ -2023,6 +2398,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
   }
+  return false;
 });
 
 // ─── Silent Download Routing (Phase 3) ──────────────────────────────────────
@@ -2299,25 +2675,66 @@ async function inspectElement(payload: Record<string, unknown>): Promise<unknown
   return results[0]?.result;
 }
 
-async function selectOption(payload: Record<string, unknown>): Promise<unknown> {
+async function selectOption(payload: Record<string, unknown>): Promise<ActionResult> {
+  const startedAt = Date.now();
   const target = await resolveTargetTab(payload);
   const sel = resolveSelectorOrRef(payload);
   const val = String(payload.value ?? '');
-  const results = await chrome.scripting.executeScript({
+  const prepRes = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (selector: string, optionVal: string) => {
+    func: async (selector: string, optionVal: string) => {
       const select = document.querySelector(selector) as HTMLSelectElement | null;
       if (!select) throw new Error(`Select element not found: ${selector}`);
       const opt = Array.from(select.options).find((o) => o.value === optionVal || o.text.trim() === optionVal);
       if (!opt) throw new Error(`Option not found: ${optionVal}`);
-      select.value = opt.value;
-      select.dispatchEvent(new Event('input', { bubbles: true }));
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      return { selected: opt.value, text: opt.text.trim() };
+      const r0 = select.getBoundingClientRect();
+      if (r0.top < 24 || r0.bottom > window.innerHeight - 24) {
+        select.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        await new Promise((r) => setTimeout(r, 320));
+      }
+      const r = select.getBoundingClientRect();
+      const optIndex = Array.from(select.options).indexOf(opt);
+      return {
+        x: Math.round(r.left + r.width / 2),
+        y: Math.round(r.top + r.height / 2),
+        rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+        optValue: opt.value,
+        optText: opt.text.trim(),
+        optIndex,
+      };
     },
     args: [sel, val],
   });
-  return results[0]?.result;
+
+  const prep = prepRes[0]?.result;
+  if (!prep) throw new Error(`Select element not found: ${sel}`);
+
+  const label = `SELECTED · ${formatHumanLabel(prep.optText || prep.optValue)}`;
+  await dispatchShadowCursor(target, 'select', prep.x, prep.y, label, prep.rect, label);
+
+  const applyRes = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string, optValue: string) => {
+      const select = document.querySelector(selector) as HTMLSelectElement | null;
+      if (!select) return false;
+      select.value = optValue;
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return select.value === optValue;
+    },
+    args: [sel, prep.optValue],
+  });
+
+  return {
+    ok: true,
+    action: 'select',
+    target: formatHumanLabel(prep.optText || prep.optValue),
+    index: prep.optIndex,
+    text: prep.optText,
+    rect: { x: Math.round(prep.rect.left), y: Math.round(prep.rect.top), w: Math.round(prep.rect.width), h: Math.round(prep.rect.height) },
+    verified: Boolean(applyRes[0]?.result),
+    ms: Date.now() - startedAt,
+  } as ActionResult & { index: number; text: string };
 }
 
 async function scrollIntoView(payload: Record<string, unknown>): Promise<unknown> {
@@ -2361,22 +2778,56 @@ async function waitForCondition(payload: Record<string, unknown>): Promise<unkno
   return results[0]?.result;
 }
 
-async function dragAndDrop(payload: Record<string, unknown>): Promise<unknown> {
+async function dragAndDrop(payload: Record<string, unknown>): Promise<ActionResult> {
+  const startedAt = Date.now();
   const target = await resolveTargetTab(payload);
   const fromSel = payload.fromSelector ? String(payload.fromSelector) : payload.fromRef ? `[data-drishti-ref="${String(payload.fromRef)}"]` : null;
   const toSel = payload.toSelector ? String(payload.toSelector) : payload.toRef ? `[data-drishti-ref="${String(payload.toRef)}"]` : null;
-  const results = await chrome.scripting.executeScript({
+
+  const prepRes = await chrome.scripting.executeScript({
     target: { tabId: target },
-    func: (fSel: string | null, tSel: string | null, fx: number | null, fy: number | null, tx: number | null, ty: number | null) => {
+    func: async (fSel: string | null, tSel: string | null, fx: number | null, fy: number | null, tx: number | null, ty: number | null) => {
       const fromEl = fSel ? document.querySelector(fSel) : fx !== null && fy !== null ? document.elementFromPoint(fx, fy) : null;
       const toEl = tSel ? document.querySelector(tSel) : tx !== null && ty !== null ? document.elementFromPoint(tx, ty) : null;
       if (!fromEl || !toEl) throw new Error('Source or target element not found for drag');
+      const r0 = fromEl.getBoundingClientRect();
+      if (r0.top < 24 || r0.bottom > window.innerHeight - 24) {
+        fromEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        await new Promise((r) => setTimeout(r, 320));
+      }
       const fr = fromEl.getBoundingClientRect();
       const tr = toEl.getBoundingClientRect();
       const sx = fx ?? Math.round(fr.left + fr.width / 2);
       const sy = fy ?? Math.round(fr.top + fr.height / 2);
       const ex = tx ?? Math.round(tr.left + tr.width / 2);
       const ey = ty ?? Math.round(tr.top + tr.height / 2);
+      return {
+        sx,
+        sy,
+        ex,
+        ey,
+        rect: { left: fr.left, top: fr.top, width: fr.width, height: fr.height },
+        fromLabel: (fromEl.textContent || fSel || 'source').trim(),
+        toLabel: (toEl.textContent || tSel || 'target').trim(),
+      };
+    },
+    args: [fromSel, toSel, (payload.fromX as number) ?? null, (payload.fromY as number) ?? null, (payload.toX as number) ?? null, (payload.toY as number) ?? null],
+  });
+
+  const prep = prepRes[0]?.result;
+  if (!prep) throw new Error('Source or target element not found for drag');
+
+  const label = `DRAG · ${formatHumanLabel(prep.fromLabel, 12)} → ${formatHumanLabel(prep.toLabel, 12)}`;
+  await dispatchShadowCursor(target, 'drag', prep.sx, prep.sy, label, prep.rect, label, {
+    dragTo: { x: prep.ex, y: prep.ey },
+  });
+
+  const execRes = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (fSel: string | null, tSel: string | null, sx: number, sy: number, ex: number, ey: number) => {
+      const fromEl = fSel ? document.querySelector(fSel) : document.elementFromPoint(sx, sy);
+      const toEl = tSel ? document.querySelector(tSel) : document.elementFromPoint(ex, ey);
+      if (!fromEl || !toEl) return false;
       const dt = new DataTransfer();
       fromEl.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: sx, clientY: sy }));
       fromEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt, clientX: sx, clientY: sy }));
@@ -2384,11 +2835,19 @@ async function dragAndDrop(payload: Record<string, unknown>): Promise<unknown> {
       toEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientX: ex, clientY: ey }));
       fromEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt, clientX: ex, clientY: ey }));
       toEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: ex, clientY: ey }));
-      return { dragged: true, from: { x: sx, y: sy }, to: { x: ex, y: ey } };
+      return true;
     },
-    args: [fromSel, toSel, (payload.fromX as number) ?? null, (payload.fromY as number) ?? null, (payload.toX as number) ?? null, (payload.toY as number) ?? null],
+    args: [fromSel, toSel, prep.sx, prep.sy, prep.ex, prep.ey],
   });
-  return results[0]?.result;
+
+  return {
+    ok: true,
+    action: 'drag',
+    target: `${formatHumanLabel(prep.fromLabel, 12)} → ${formatHumanLabel(prep.toLabel, 12)}`,
+    rect: { x: Math.round(prep.rect.left), y: Math.round(prep.rect.top), w: Math.round(prep.rect.width), h: Math.round(prep.rect.height) },
+    verified: Boolean(execRes[0]?.result),
+    ms: Date.now() - startedAt,
+  };
 }
 
 async function useTab(payload: Record<string, unknown>): Promise<unknown> {

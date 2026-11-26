@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Drishti Visual Fixture (12 Controls)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0b1220; color: #e2e8f0; padding: 24px; min-height: 1400px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 16px; max-width: 900px; }
+    .card { background: #111a2e; border: 1px solid #1e293b; border-radius: 10px; padding: 14px; }
+    button, input, textarea, select { padding: 8px 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; }
+    #drop-zone { margin-top: 8px; padding: 18px; border: 2px dashed #38bdf8; border-radius: 8px; text-align: center; }
+    #hover-menu-dropdown { display: none; margin-top: 6px; padding: 8px; background: #1e293b; border-radius: 6px; }
+    #hover-menu:hover #hover-menu-dropdown { display: block; }
+    #y800-target { position: absolute; top: 800px; left: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Drishti Visual Fixture</h1>
+  <div class="grid">
+    <!-- 1. Button (counter) -->
+    <div class="card">
+      <button id="counter-btn" type="button">Counter: <span id="counter-val">0</span></button>
+    </div>
+
+    <!-- 2. Input -->
+    <div class="card">
+      <label for="custname">Customer name</label><br />
+      <input id="custname" name="custname" aria-label="Customer name" placeholder="Customer name" />
+    </div>
+
+    <!-- 3. 200-char Textarea -->
+    <div class="card">
+      <label for="notes">Notes (200 chars)</label><br />
+      <textarea id="notes" aria-label="Order notes" maxlength="200" rows="3" placeholder="Enter notes..."></textarea>
+    </div>
+
+    <!-- 4. Select -->
+    <div class="card">
+      <label for="size-select">Size</label><br />
+      <select id="size-select" aria-label="Size">
+        <option value="small">Small</option>
+        <option value="medium">Medium</option>
+        <option value="large">Large</option>
+      </select>
+    </div>
+
+    <!-- 5. Checkbox -->
+    <div class="card">
+      <label><input id="agree-cb" type="checkbox" /> Accept terms</label>
+    </div>
+
+    <!-- 6. Drag Handle + Drop Zone -->
+    <div class="card">
+      <div id="drag-handle" draggable="true" style="padding:8px;background:#1e293b;border-radius:6px;cursor:grab;">Drag Handle</div>
+      <div id="drop-zone">Drop Zone</div>
+    </div>
+
+    <!-- 7. Hover Menu -->
+    <div class="card" id="hover-menu">
+      <button id="hover-trigger" type="button">Hover Menu</button>
+      <div id="hover-menu-dropdown">Menu Revealed!</div>
+    </div>
+
+    <!-- 8. Iframe -->
+    <div class="card">
+      <iframe id="fixture-frame" title="Inner Frame" srcdoc="<button id='inner-btn'>Inner Frame Button</button>" style="width:100%;height:60px;border:1px solid #334155;"></iframe>
+    </div>
+
+    <!-- 9. Shadow-DOM Button -->
+    <div class="card" id="shadow-host"></div>
+
+    <!-- 10. Canvas -->
+    <div class="card">
+      <canvas id="draw-canvas" width="220" height="60" style="border:1px solid #334155;"></canvas>
+    </div>
+
+    <!-- 11. Link -->
+    <div class="card">
+      <a id="fixture-link" href="#section-bottom">Jump to bottom link</a>
+    </div>
+  </div>
+
+  <!-- 12. Element at y=800 -->
+  <button id="y800-target" type="button">Target at y=800</button>
+
+  <script>
+    let count = 0;
+    document.getElementById('counter-btn').addEventListener('click', () => {
+      count += 1;
+      document.getElementById('counter-val').textContent = String(count);
+    });
+    const dz = document.getElementById('drop-zone');
+    dz.addEventListener('dragover', (e) => e.preventDefault());
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dz.textContent = 'Dropped!';
+    });
+    const sh = document.getElementById('shadow-host').attachShadow({ mode: 'open' });
+    sh.innerHTML = '<button id="shadow-btn" type="button">Shadow Button</button>';
+  </script>
+</body>
+</html>

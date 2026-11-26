@@ -1,0 +1,194 @@
+[
+  {
+    "step": "navigate",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "navigate",
+      "target": "http://127.0.0.1:4599/gallery/visual-control/demo.html",
+      "verified": true,
+      "ms": 9
+    }
+  },
+  {
+    "step": "00-demo-clean.png",
+    "ok": true,
+    "kb": 158
+  },
+  {
+    "step": "click",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "click",
+      "target": "Click me",
+      "rect": {
+        "x": 47,
+        "y": 181,
+        "w": 88,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 756
+    }
+  },
+  {
+    "step": "02-click.png",
+    "ok": true,
+    "kb": 167
+  },
+  {
+    "step": "03-type-mid.png",
+    "ok": true,
+    "kb": 178
+  },
+  {
+    "step": "type",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "type",
+      "target": "Full name",
+      "rect": {
+        "x": 446,
+        "y": 201,
+        "w": 349,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 849
+    }
+  },
+  {
+    "step": "04-type-done.png",
+    "ok": true,
+    "kb": 181
+  },
+  {
+    "step": "scroll",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "scroll",
+      "target": "down 420px",
+      "verified": true,
+      "ms": 327
+    }
+  },
+  {
+    "step": "05-scroll.png",
+    "ok": true,
+    "kb": 74
+  },
+  {
+    "step": "press_key",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "key",
+      "target": "End",
+      "rect": {
+        "x": 446,
+        "y": 201,
+        "w": 349,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 165
+    }
+  },
+  {
+    "step": "06-key.png",
+    "ok": true,
+    "kb": 177
+  },
+  {
+    "step": "scroll-2",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "scroll",
+      "target": "down 320px",
+      "verified": true,
+      "ms": 325
+    }
+  },
+  {
+    "step": "13-scroll-progress.png",
+    "ok": true,
+    "kb": 77
+  },
+  {
+    "step": "checkbox",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "click",
+      "target": "#agree-cb",
+      "rect": {
+        "x": 450,
+        "y": 52,
+        "w": 17,
+        "h": 17
+      },
+      "verified": true,
+      "ms": 519
+    }
+  },
+  {
+    "step": "14-checkbox.png",
+    "ok": true,
+    "kb": 90
+  },
+  {
+    "step": "scroll-3",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "scroll",
+      "target": "down 520px",
+      "verified": true,
+      "ms": 343
+    }
+  },
+  {
+    "step": "hover-lower-probe",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "hover",
+      "target": "Overlay probe — lower",
+      "rect": {
+        "x": 844,
+        "y": 344,
+        "w": 230,
+        "h": 45
+      },
+      "verified": true,
+      "ms": 1923
+    }
+  },
+  {
+    "step": "09-overlay-probe.png",
+    "ok": true,
+    "kb": 95
+  },
+  {
+    "step": "overlay-bounds",
+    "ok": true,
+    "result": {
+      "overlay": {
+        "height": 591,
+        "width": 1351,
+        "x": 0,
+        "y": 0
+      },
+      "html": {
+        "height": 1200,
+        "width": 1351,
+        "x": 0,
+        "y": -609
+      }
+    }
+  }
+]

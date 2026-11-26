@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.2] - 2026-11-26
+
+- 
+
 ## [0.1.1](https://github.com/SudhirDevOps1/drishti-browser-ai/compare/drishti-browser-ai-v0.1.0...drishti-browser-ai-v0.1.1) (2026-11-25)
 
 

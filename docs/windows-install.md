@@ -86,7 +86,7 @@ node dist/index.js
 ```
 Output:
 ```
-[INFO] Starting Drishti Browser AI Bridge v0.1.1
+[INFO] Starting Drishti Browser AI Bridge v0.1.2
 [INFO] WebSocket port: 7483
 [INFO] Auth token: ****xxxx (configured)
 [INFO] Bridge ready. Waiting for Chrome Extension connection...

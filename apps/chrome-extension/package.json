@@ -1,11 +1,11 @@
 {
   "name": "@sudhir-browser-ai/chrome-extension",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist"
   },

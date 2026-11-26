@@ -75,11 +75,33 @@ export class BridgeServer extends EventEmitter {
 
   /** Mission Inbox queue dispatched from Drishti Control Deck Sidepanel. */
   private missions: MissionRecord[] = [];
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private static processGuardsInstalled = false;
 
   constructor(options: BridgeServerOptions) {
     super();
     this.port = options.port;
     this.authToken = options.authToken;
+    if (!BridgeServer.processGuardsInstalled) {
+      BridgeServer.processGuardsInstalled = true;
+      process.on('uncaughtException', (err) => {
+        logger.error(`Uncaught exception (bridge kept alive): ${err instanceof Error ? err.message : String(err)}`);
+      });
+      process.on('unhandledRejection', (reason) => {
+        logger.error(`Unhandled rejection (bridge kept alive): ${reason instanceof Error ? reason.message : String(reason)}`);
+      });
+    }
+  }
+
+  private safeSend(ws: WebSocket | null | undefined, payload: unknown): boolean {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify(payload));
+      return true;
+    } catch (err) {
+      logger.warn(`safeSend failed: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
   }
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -118,12 +140,33 @@ export class BridgeServer extends EventEmitter {
         logger.info(`Incoming connection from ${remoteAddr}`);
         this.handleConnection(ws, remoteAddr);
       });
+
+      this.heartbeatTimer = setInterval(() => {
+        if (!this.wss) return;
+        for (const client of this.wss.clients) {
+          const ext = client as WebSocket & { isAlive?: boolean };
+          if (ext.isAlive === false) {
+            try {
+              ext.terminate();
+            } catch {}
+            continue;
+          }
+          ext.isAlive = false;
+          try {
+            if (ext.readyState === WebSocket.OPEN) ext.ping();
+          } catch {}
+        }
+      }, 30_000);
     });
   }
 
   /** Stop the server gracefully, closing all connections. */
   stop(): Promise<void> {
     return new Promise((resolve) => {
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
       // Reject all pending commands
       for (const [id, pending] of this.pending) {
         clearTimeout(pending.timer);
@@ -306,7 +349,7 @@ export class BridgeServer extends EventEmitter {
         this.missions = [record, ...this.missions].slice(0, 25);
         logger.info(`Mission ${record.id} [${record.dispatchedTo}]: ${record.prompt.slice(0, 60)}`);
 
-        ws.send(JSON.stringify({
+        this.safeSend(ws, {
           type: 'response',
           id: msg.id,
           result: {
@@ -320,7 +363,7 @@ export class BridgeServer extends EventEmitter {
                 : `Queued in Universal MCP Mission Inbox (${record.id})`,
             ],
           },
-        }));
+        });
         return;
       }
 
@@ -328,20 +371,20 @@ export class BridgeServer extends EventEmitter {
       if (isController && msg.id && msg.action === 'OS_SAVE_DIALOG') {
         const opts = (msg.payload || {}) as SaveDialogOptions;
         const result = await confirmBrowserSaveDialog(opts);
-        ws.send(JSON.stringify({ id: msg.id, success: true, result }));
+        this.safeSend(ws, { id: msg.id, success: true, result });
         return;
       }
 
       // ── Handle Bridge-level Mission Queue commands from MCP/CLI ──
       if (isController && msg.id && msg.action === 'GET_MISSIONS') {
-        ws.send(JSON.stringify({
+        this.safeSend(ws, {
           id: msg.id,
           success: true,
           result: {
             missions: this.missions,
             antigravityDirectEnabled: Boolean(process.env.ANTIGRAVITY_LS_ADDRESS && process.env.ANTIGRAVITY_CSRF_TOKEN),
           },
-        }));
+        });
         return;
       }
 
@@ -349,26 +392,27 @@ export class BridgeServer extends EventEmitter {
         const p = (msg.payload || {}) as Record<string, any>;
         const target = this.missions.find((m) => m.id === p.missionId);
         if (!target) {
-          ws.send(JSON.stringify({ id: msg.id, success: false, error: `Mission not found: ${p.missionId}` }));
+          this.safeSend(ws, { id: msg.id, success: false, error: `Mission not found: ${p.missionId}` });
           return;
         }
         if (p.status) target.status = p.status;
         if (p.summary) target.summary = String(p.summary);
-        if (this.extensionSocket && this.extensionSocket.readyState === WebSocket.OPEN) {
-          this.extensionSocket.send(JSON.stringify({ type: 'mission_update', mission: target }));
-        }
-        ws.send(JSON.stringify({ id: msg.id, success: true, result: target }));
+        this.safeSend(this.extensionSocket, { type: 'mission_update', mission: target });
+        this.safeSend(ws, { id: msg.id, success: true, result: target });
         return;
       }
 
       // ── Forward command from MCP Controller to Chrome Extension ──
       if (isController && msg.id && msg.action) {
         if (!this.extensionSocket || this.extensionSocket.readyState !== WebSocket.OPEN) {
-          ws.send(JSON.stringify({ id: msg.id, success: false, error: 'No Chrome Extension connected to bridge' }));
+          this.safeSend(ws, { id: msg.id, success: false, error: 'No Chrome Extension connected to bridge' });
           return;
         }
         this.forwardMap.set(msg.id, ws);
-        this.extensionSocket.send(JSON.stringify({ id: msg.id, action: msg.action, payload: msg.payload }));
+        if (!this.safeSend(this.extensionSocket, { id: msg.id, action: msg.action, payload: msg.payload })) {
+          this.forwardMap.delete(msg.id);
+          this.safeSend(ws, { id: msg.id, success: false, error: 'Failed to forward command to Chrome Extension' });
+        }
         return;
       }
 
@@ -376,9 +420,9 @@ export class BridgeServer extends EventEmitter {
       if (msg.type === 'response' && msg.id) {
         // Forward to waiting MCP Controller if applicable
         const clientWs = this.forwardMap.get(msg.id);
-        if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+        if (clientWs) {
           this.forwardMap.delete(msg.id);
-          clientWs.send(JSON.stringify({ id: msg.id, success: !msg.error, result: msg.result, error: msg.error }));
+          this.safeSend(clientWs, { id: msg.id, success: !msg.error, result: msg.result, error: msg.error });
         }
 
         // Also resolve in-process pending command if applicable
@@ -403,13 +447,13 @@ export class BridgeServer extends EventEmitter {
         try {
           const result = await handler(msg.payload);
           if (msg.id) {
-            ws.send(JSON.stringify({ type: 'response', id: msg.id, result }));
+            this.safeSend(ws, { type: 'response', id: msg.id, result });
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error(`Handler error for action "${msg.type}": ${errMsg}`);
           if (msg.id) {
-            ws.send(JSON.stringify({ type: 'response', id: msg.id, error: errMsg }));
+            this.safeSend(ws, { type: 'response', id: msg.id, error: errMsg });
           }
         }
       } else {
@@ -417,13 +461,23 @@ export class BridgeServer extends EventEmitter {
       }
     });
 
+    const hbWs = ws as WebSocket & { isAlive?: boolean };
+    hbWs.isAlive = true;
+    ws.on('pong', () => {
+      hbWs.isAlive = true;
+    });
+
     ws.on('close', (code, reason) => {
       this.controllers.delete(ws);
-      if (this.extensionSocket === ws) {
+      for (const [cmdId, mappedWs] of this.forwardMap.entries()) {
+        if (mappedWs === ws) this.forwardMap.delete(cmdId);
+      }
+      const wasExtension = this.extensionSocket === ws;
+      if (wasExtension) {
         this.extensionSocket = null;
       }
 
-      if (authenticated) {
+      if (authenticated && wasExtension) {
         logger.info(`Chrome Extension disconnected (code=${code} reason=${reason.toString()})`);
 
         // Reject all pending commands since the connection dropped
@@ -435,13 +489,16 @@ export class BridgeServer extends EventEmitter {
 
         this.emit('extension:disconnected');
       } else {
-        logger.debug(`Unauthenticated connection from ${remoteAddr} closed`);
+        logger.debug(`Connection from ${remoteAddr} closed (code=${code})`);
       }
     });
 
     ws.on('error', (err) => {
       logger.error(`WebSocket error (${remoteAddr}): ${err.message}`);
-      this.emit('error', err);
+      this.controllers.delete(ws);
+      for (const [cmdId, mappedWs] of this.forwardMap.entries()) {
+        if (mappedWs === ws) this.forwardMap.delete(cmdId);
+      }
     });
   }
 }

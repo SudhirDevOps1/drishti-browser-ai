@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Play,
@@ -9,26 +9,14 @@ import {
   Radio,
   Terminal,
   Layers,
-  ExternalLink,
   X,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
   Command,
   Zap,
-  ArrowRight,
-  Shield,
-  Activity,
-  Compass,
   Crosshair,
   Power,
-  Lock,
-  Unlock,
   Camera,
   Eye,
   FileText,
-  Table,
-  Music,
   Code,
   RotateCcw,
   History,
@@ -155,6 +143,7 @@ export function SidePanelApp() {
   // Human Takeover & Cursor Speed state
   const [humanTakeoverActive, setHumanTakeoverActive] = useState<boolean>(false);
   const [cursorSpeed, setCursorSpeed] = useState<'natural' | 'demo' | 'fast'>('natural');
+  const [trustedCdpMode, setTrustedCdpMode] = useState<boolean>(true);
 
   // Live Console & Network Error Drawer state
   const [showDevDrawer, setShowDevDrawer] = useState<boolean>(false);
@@ -323,7 +312,7 @@ export function SidePanelApp() {
   };
 
   useEffect(() => {
-    chrome.storage.local.get(['bridgeConnected', 'automationMode', 'automationEnabled', 'lockedTabId', 'missionHistory', 'customMacros', 'cursorSpeed'], (res) => {
+    chrome.storage.local.get(['bridgeConnected', 'automationMode', 'automationEnabled', 'lockedTabId', 'missionHistory', 'customMacros', 'cursorSpeed', 'trustedCdpMode'], (res) => {
       setConnected(!!res.bridgeConnected);
       if (res.automationMode) setMode(res.automationMode);
       if (res.automationEnabled !== undefined) setAutomationEnabled(!!res.automationEnabled);
@@ -332,6 +321,9 @@ export function SidePanelApp() {
       if (Array.isArray(res.customMacros)) setCustomMacros(res.customMacros);
       if (res.cursorSpeed === 'fast' || res.cursorSpeed === 'demo' || res.cursorSpeed === 'natural') {
         setCursorSpeed(res.cursorSpeed);
+      }
+      if (res.trustedCdpMode !== undefined) {
+        setTrustedCdpMode(!!res.trustedCdpMode);
       }
     });
 
@@ -632,6 +624,22 @@ export function SidePanelApp() {
               <button
                 type="button"
                 onClick={() => {
+                  const next = !trustedCdpMode;
+                  setTrustedCdpMode(next);
+                  chrome.storage.local.set({ trustedCdpMode: next });
+                }}
+                className={`px-2 py-1 rounded-lg border text-[9px] font-bold uppercase transition ${
+                  trustedCdpMode
+                    ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                    : 'bg-[#060a12] border-slate-800 text-slate-400'
+                }`}
+                title="Trusted CDP Input: Uses real mouse & keyboard events."
+              >
+                Trusted CDP Input: {trustedCdpMode ? 'ON' : 'OFF'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   const next = cursorSpeed === 'natural' ? 'demo' : cursorSpeed === 'demo' ? 'fast' : 'natural';
                   setCursorSpeed(next);
                   chrome.storage.local.set({ cursorSpeed: next });
@@ -658,6 +666,9 @@ export function SidePanelApp() {
               </div>
             </div>
           </div>
+          <p className="text-[10px] text-slate-400">
+            Trusted CDP Input: Uses real mouse &amp; keyboard events.
+          </p>
 
           {/* Textarea */}
           <div className="relative">

@@ -1,0 +1,316 @@
+[
+  {
+    "step": "extension",
+    "ok": true,
+    "result": {
+      "version": "0.1.2",
+      "connected": true,
+      "url": "https://httpbin.org/forms/post"
+    }
+  },
+  {
+    "step": "navigate",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "navigate",
+      "target": "http://127.0.0.1:4599/gallery/visual-control/demo.html",
+      "verified": true,
+      "ms": 63
+    }
+  },
+  {
+    "step": "00-demo-clean.png",
+    "ok": false,
+    "error": "Screenshot capture failed: Failed to capture tab: image readback failed"
+  },
+  {
+    "step": "hover",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "hover",
+      "target": "Shipping options ▾",
+      "rect": {
+        "x": 844,
+        "y": 179,
+        "w": 349,
+        "h": 38
+      },
+      "verified": true,
+      "ms": 38693
+    }
+  },
+  {
+    "step": "01-hover.png",
+    "ok": true,
+    "kb": 169
+  },
+  {
+    "step": "hover-menu-css",
+    "ok": true,
+    "result": {
+      "bounds": {
+        "height": 107,
+        "width": 349,
+        "x": 844,
+        "y": 219
+      },
+      "visible": null
+    }
+  },
+  {
+    "step": "click",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "click",
+      "target": "Click me",
+      "rect": {
+        "x": 47,
+        "y": 181,
+        "w": 88,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 753
+    }
+  },
+  {
+    "step": "02-click.png",
+    "ok": true,
+    "kb": 162
+  },
+  {
+    "step": "click-single-fire",
+    "ok": true,
+    "result": {
+      "before": "0",
+      "after": "1",
+      "expected": "+1"
+    }
+  },
+  {
+    "step": "03-type-mid.png",
+    "ok": true,
+    "kb": 162
+  },
+  {
+    "step": "type",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "type",
+      "target": "Full name",
+      "rect": {
+        "x": 446,
+        "y": 201,
+        "w": 349,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 687
+    }
+  },
+  {
+    "step": "04-type-done.png",
+    "ok": true,
+    "kb": 177
+  },
+  {
+    "step": "04b-type-progress.png",
+    "ok": true,
+    "kb": 101
+  },
+  {
+    "step": "04c-type-progress-done.png",
+    "ok": true,
+    "kb": 101
+  },
+  {
+    "step": "scroll",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "scroll",
+      "target": "down 620px",
+      "verified": true,
+      "ms": 336
+    }
+  },
+  {
+    "step": "05-scroll.png",
+    "ok": true,
+    "kb": 12
+  },
+  {
+    "step": "press_key",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "key",
+      "target": "Tab",
+      "rect": {
+        "x": 47,
+        "y": -363,
+        "w": 1146,
+        "h": 76
+      },
+      "verified": true,
+      "ms": 441
+    }
+  },
+  {
+    "step": "06-key.png",
+    "ok": true,
+    "kb": 16
+  },
+  {
+    "step": "select",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "select",
+      "target": "Large",
+      "rect": {
+        "x": 47,
+        "y": 259,
+        "w": 349,
+        "h": 39
+      },
+      "verified": true,
+      "ms": 815
+    }
+  },
+  {
+    "step": "07-select.png",
+    "ok": true,
+    "kb": 137
+  },
+  {
+    "step": "drag",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "drag",
+      "target": "⠿ Drag me → Drop zone",
+      "rect": {
+        "x": 844,
+        "y": 284,
+        "w": 209,
+        "h": 43
+      },
+      "verified": true,
+      "ms": 480
+    }
+  },
+  {
+    "step": "08-drag.png",
+    "ok": true,
+    "kb": 140
+  },
+  {
+    "step": "hover-y800",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "hover",
+      "target": "Element at y = 800 —",
+      "rect": {
+        "x": 40,
+        "y": 413,
+        "w": 301,
+        "h": 45
+      },
+      "verified": true,
+      "ms": 487
+    }
+  },
+  {
+    "step": "09-y800.png",
+    "ok": true,
+    "kb": 85
+  },
+  {
+    "step": "overlay-bounds",
+    "ok": true,
+    "result": {
+      "overlay": {
+        "height": 647,
+        "width": 1351,
+        "x": 0,
+        "y": 0
+      },
+      "html": {
+        "height": 1900,
+        "width": 1351,
+        "x": 0,
+        "y": -387
+      }
+    }
+  },
+  {
+    "step": "10-after-4s.png",
+    "ok": true,
+    "kb": 150
+  },
+  {
+    "step": "click-missing-selector",
+    "ok": true,
+    "result": {
+      "error": "Error: Element not found: #does-not-exist"
+    }
+  },
+  {
+    "step": "11-error.png",
+    "ok": true,
+    "kb": 155
+  },
+  {
+    "step": "double_click",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "double_click",
+      "target": "Click me",
+      "rect": {
+        "x": 47,
+        "y": 180,
+        "w": 88,
+        "h": 37
+      },
+      "verified": true,
+      "ms": 458
+    }
+  },
+  {
+    "step": "12-double-click.png",
+    "ok": true,
+    "kb": 166
+  },
+  {
+    "step": "double-click-count",
+    "ok": true,
+    "result": {
+      "before": "2",
+      "after": "4",
+      "expected": "+2"
+    }
+  },
+  {
+    "step": "scroll-bottom",
+    "ok": true,
+    "result": {
+      "ok": true,
+      "action": "scroll",
+      "target": "bottom 300px",
+      "verified": true,
+      "ms": 336
+    }
+  },
+  {
+    "step": "13-scroll-bottom.png",
+    "ok": true,
+    "kb": 86
+  }
+]

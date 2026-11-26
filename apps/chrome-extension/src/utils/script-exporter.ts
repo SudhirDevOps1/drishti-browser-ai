@@ -27,9 +27,9 @@ export function exportSessionScript(actions: (RecordedAction | string)[], format
       return { action, detail };
     }
     return {
-      action: item.action.toUpperCase(),
       detail: item.selector || item.text || item.url || JSON.stringify(item.payload || {}),
       ...item,
+      action: item.action.toUpperCase(),
     };
   });
 
