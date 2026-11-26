@@ -1,6 +1,6 @@
 # Project Status — Drishti Browser AI
 
-- **Version:** `0.1.2` (SSOT verified via `node scripts/version.mjs verify`)
+- **Version:** `0.1.3` (SSOT verified via `node scripts/version.mjs verify`)
 - **Build:** `pnpm -r run build` (all workspace projects including `apps/chrome-extension`, `apps/mcp-server`, `apps/local-bridge`, `apps/web-showcase`)
 - **Unit Tests:** `pnpm test` (`24/24` passing across 5 files via Vitest)
 - **E2E Smoke Tests:** `pnpm test:e2e` (`4/4` Playwright Chromium checks: `popup.html`, `sidepanel.html`, `options.html`, live HTTP fixture)

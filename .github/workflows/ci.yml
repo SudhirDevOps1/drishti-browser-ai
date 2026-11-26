@@ -19,8 +19,8 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - name: Sync derived version surfaces on Release Please PRs
-        if: startsWith(github.head_ref, 'release-please--')
+      - name: Sync derived version surfaces on Release Please PRs & release merges
+        if: startsWith(github.head_ref, 'release-please--') || startsWith(github.event.head_commit.message, 'chore(main): release')
         run: pnpm version:sync
       - run: pnpm version:verify
       - run: pnpm -r run build

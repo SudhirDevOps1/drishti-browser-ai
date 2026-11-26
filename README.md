@@ -6,7 +6,7 @@
   <img src="apps/web-showcase/public/brand/drishti-logo-dark.svg" alt="Drishti Browser AI Logo" width="280" />
 </p>
 
-<h1 align="center">Drishti Browser AI (दृष्टि) — v0.1.2</h1>
+<h1 align="center">Drishti Browser AI (दृष्टि) — v0.1.3</h1>
 
 <p align="center">
   <strong>AI Browser Vision &amp; Human Motion Platform for Google Chrome &amp; Brave via Model Context Protocol (MCP)</strong><br />

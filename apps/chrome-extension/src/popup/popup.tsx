@@ -49,7 +49,7 @@ You are an expert AI Browser Automation Agent empowered to inspect, navigate, an
 - Local MCP Server: <path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js
 - WebSocket Bridge: ws://127.0.0.1:${port}
 - Bridge Auth Token: ${token}
-- Chrome Extension: Drishti Browser AI (v0.1.2 PRO)
+- Chrome Extension: Drishti Browser AI (v0.1.3 PRO)
 - Mode: Mode A (Daily Chrome profile with user's real sessions, cookies & logins)
 
 ## 2. MCP CONFIGURATION
@@ -389,7 +389,7 @@ When the user gives you any browser task:
             </>
           )}
         </button>
-        <span className="font-mono text-slate-400">v0.1.2</span>
+        <span className="font-mono text-slate-400">v0.1.3</span>
       </div>
     </div>
   );
