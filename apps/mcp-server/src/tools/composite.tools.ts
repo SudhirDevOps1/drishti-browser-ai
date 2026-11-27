@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import { BridgeClient } from '../bridge-client.js';
 import { MemoryStore } from '../db/memory-store.js';
@@ -22,6 +24,14 @@ const StepSchema = z.object({
     'wait_for',
     'screenshot',
     'verify',
+    'evaluate',
+    'read',
+    'grep',
+    'scroll_into_view',
+    'print_pdf',
+    'new_tab',
+    'use_tab',
+    'switch_tab',
   ]),
   params: z.record(z.string(), z.unknown()).optional(),
 });
@@ -52,6 +62,14 @@ const ACTION_MAP: Record<string, string> = {
   wait_for: 'WAIT_FOR',
   screenshot: 'SCREENSHOT',
   verify: 'VERIFY_ACTION',
+  evaluate: 'EVALUATE',
+  read: 'READ_PAGE',
+  grep: 'GREP_PAGE',
+  scroll_into_view: 'SCROLL_INTO_VIEW',
+  print_pdf: 'PRINT_PDF',
+  new_tab: 'NEW_TAB',
+  use_tab: 'USE_TAB',
+  switch_tab: 'SWITCH_TAB',
 };
 
 export const COMPOSITE_TOOLS = [
@@ -85,6 +103,14 @@ export const COMPOSITE_TOOLS = [
                   'wait_for',
                   'screenshot',
                   'verify',
+                  'evaluate',
+                  'read',
+                  'grep',
+                  'scroll_into_view',
+                  'print_pdf',
+                  'new_tab',
+                  'use_tab',
+                  'switch_tab',
                 ],
               },
               params: { type: 'object', description: 'Action parameters (url, selector, ref, text, ms, etc.).' },
@@ -179,22 +205,37 @@ export async function handleCompositeTool(
         } catch {}
       }
       const diff: Record<string, unknown> = { ok: true };
-      if (r.url && r.url !== prevUrl) {
-        diff.urlChanged = { from: prevUrl || null, to: r.url };
-        prevUrl = String(r.url);
+      if (action === 'screenshot' && typeof r.base64 === 'string') {
+        const buf = Buffer.from(r.base64, 'base64');
+        if (typeof resolvedParams.path === 'string' && resolvedParams.path.trim()) {
+          const savedPath = path.resolve(resolvedParams.path);
+          mkdirSync(path.dirname(savedPath), { recursive: true });
+          writeFileSync(savedPath, buf);
+          diff.path = savedPath;
+        }
+        diff.format = r.format ?? 'png';
+        diff.sizeBytes = buf.length;
+      } else {
+        if (r.url && r.url !== prevUrl) {
+          diff.urlChanged = { from: prevUrl || null, to: r.url };
+          prevUrl = String(r.url);
+        }
+        if (r.title && r.title !== prevTitle) {
+          diff.titleChanged = { from: prevTitle || null, to: r.title };
+          prevTitle = String(r.title);
+        }
+        if (r.summary) diff.summary = String(r.summary).slice(0, 600);
+        if (r.text) diff.text = String(r.text).slice(0, 1000);
+        if (r.markdown) diff.markdown = String(r.markdown).slice(0, 2000);
+        if (r.value !== undefined) diff.value = r.value;
+        if (Array.isArray(r.matches)) diff.matches = r.matches.slice(0, 15);
+        if (Array.isArray(r.tables)) diff.tables = r.tables.slice(0, 5);
+        if (Array.isArray(r.links)) diff.links = r.links.slice(0, 25);
+        if (Array.isArray(r.elements)) diff.elementCount = r.elements.length;
+        if (r.clicked) diff.clicked = r.clicked;
+        if (r.verified !== undefined) diff.verified = r.verified;
+        if (r.waited) diff.waited = r.waited;
       }
-      if (r.title && r.title !== prevTitle) {
-        diff.titleChanged = { from: prevTitle || null, to: r.title };
-        prevTitle = String(r.title);
-      }
-      if (r.summary) diff.summary = String(r.summary).slice(0, 600);
-      if (r.text) diff.text = String(r.text).slice(0, 1000);
-      if (Array.isArray(r.tables)) diff.tables = r.tables.slice(0, 5);
-      if (Array.isArray(r.links)) diff.links = r.links.slice(0, 25);
-      if (Array.isArray(r.elements)) diff.elementCount = r.elements.length;
-      if (r.clicked) diff.clicked = r.clicked;
-      if (r.verified !== undefined) diff.verified = r.verified;
-      if (r.waited) diff.waited = r.waited;
       results.push({ step: i + 1, action, ok: true, diff, ms });
     } catch (err) {
       const ms = Date.now() - t0;

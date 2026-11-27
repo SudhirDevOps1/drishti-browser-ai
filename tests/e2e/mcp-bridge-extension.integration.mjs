@@ -30,6 +30,8 @@ const FIXTURE_HTML = `<!doctype html>
       <tr><td>Beta</td><td>$20</td></tr>
     </tbody>
   </table>
+  <a id="filter-link" href="/filtered.html?lang=ts">TypeScript Filter</a>
+  <a href="/trending/typescript?since=daily">TypeScript</a>
   <a href="https://example.com/docs">Docs Link</a>
 </body>
 </html>`;
@@ -178,7 +180,20 @@ async function main() {
     assert.ok(!clickRes.result.isError, 'Immediate click after double-navigate must succeed without wait_for');
     const statusText = await callRpc('tools/call', { name: 'browser_evaluate', arguments: { fn: "() => document.getElementById('status')?.textContent" } });
     assert.ok(statusText.result.content[0].text.includes('Clicked!'), 'Click must update #status to Clicked!');
-    console.log('[INT OK] Double same-URL navigate + immediate click verified');
+
+    // Fast type (<=60 chars uses instant fill path < 500ms and diff:summary)
+    const typeRes = await callRpc('tools/call', { name: 'browser_type', arguments: { selector: 'input[name="email"]', text: 'fast@drishti.dev' } });
+    const typeJson = JSON.parse(typeRes.result.content[0].text);
+    assert.equal(typeJson.diff, 'summary');
+    assert.ok(typeJson.ms < 1500 && typeJson.animated === false, `Expected fast instant fill, got ms=${typeJson.ms}, animated=${typeJson.animated}`);
+
+    // Regression: click sidebar filter link and assert location.href changed
+    const filterClick = await callRpc('tools/call', { name: 'browser_click', arguments: { selector: '#filter-link', waitForUrlChange: true } });
+    const filterJson = JSON.parse(filterClick.result.content[0].text);
+    assert.equal(filterJson.verified, true, 'Filter link click must return verified:true');
+    const hrefEval = await callRpc('tools/call', { name: 'browser_evaluate', arguments: { fn: '() => location.href' } });
+    assert.ok(hrefEval.result.content[0].text.includes('/filtered.html?lang=ts'), 'Clicking filter link must update location.href');
+    console.log('[INT OK] Double same-URL navigate, fast fill, and filter link URL-change verified');
 
     // Screenshot & PDF disk export checks
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'drishti-media-'));
@@ -189,6 +204,30 @@ async function main() {
     assert.ok(!shotRes.result.isError, 'browser_screenshot(path) should succeed');
     const pngBuf = fs.readFileSync(pngPath);
     assert.ok(pngBuf.length > 500 && pngBuf[0] === 0x89 && pngBuf[1] === 0x50 && pngBuf[2] === 0x4e && pngBuf[3] === 0x47, 'Saved screenshot must have valid PNG signature');
+
+    // Regression: browser_run screenshot step saves to disk (< 1s, no base64)
+    const runPngPath = path.join(outDir, 'run-shot.png');
+    const runShotT0 = Date.now();
+    const runShotRes = await callRpc('tools/call', {
+      name: 'browser_run',
+      arguments: { steps: [{ action: 'screenshot', params: { path: runPngPath } }] },
+    });
+    const runShotMs = Date.now() - runShotT0;
+    assert.ok(!runShotRes.result.isError, 'browser_run screenshot step should succeed');
+    assert.ok(!runShotRes.result.content[0].text.includes('base64'), 'browser_run screenshot step must not return base64');
+    assert.ok(runShotMs < 1000, `browser_run screenshot step must finish <1s, took ${runShotMs}ms`);
+    const runPngBuf = fs.readFileSync(runPngPath);
+    assert.ok(runPngBuf.length > 500 && runPngBuf[0] === 0x89 && runPngBuf[1] === 0x50, 'browser_run screenshot must create valid PNG');
+
+    // Regression: trending/typescript filter link click changes location.href with 0 stale clicks
+    const tsClick = await callRpc('tools/call', {
+      name: 'browser_click',
+      arguments: { selector: 'a[href*="/trending/typescript"]', waitForUrlChange: true },
+    });
+    const tsJson = JSON.parse(tsClick.result.content[0].text);
+    assert.equal(tsJson.verified, true, 'Trending TypeScript click must return verified:true');
+    const tsHref = await callRpc('tools/call', { name: 'browser_evaluate', arguments: { fn: '() => location.href' } });
+    assert.ok(tsHref.result.content[0].text.includes('/trending/typescript'), 'Trending TypeScript click must change location.href');
 
     const pdfRes = await callRpc('tools/call', { name: 'browser_print_pdf', arguments: { path: pdfPath, format: 'A4' } });
     assert.ok(!pdfRes.result.isError, 'browser_print_pdf(path) should succeed');

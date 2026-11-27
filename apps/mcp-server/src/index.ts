@@ -18,8 +18,20 @@ function readRootVersion(): string {
   }
 }
 
+function readLocalToken(): string {
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const tokenPath = path.resolve(dir, '../../../.drishti-token');
+    if (fs.existsSync(tokenPath)) {
+      const val = fs.readFileSync(tokenPath, 'utf8').trim();
+      if (val) return val;
+    }
+  } catch {}
+  return '';
+}
+
 const BRIDGE_WS_URL = process.env.BRIDGE_WS_URL || 'ws://127.0.0.1:7483';
-const AUTH_TOKEN = process.env.BRIDGE_AUTH_TOKEN || '';
+const AUTH_TOKEN = process.env.BRIDGE_AUTH_TOKEN || readLocalToken();
 
 const bridge = new BridgeClient(BRIDGE_WS_URL, AUTH_TOKEN);
 const store = new MemoryStore();

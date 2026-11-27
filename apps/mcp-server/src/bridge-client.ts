@@ -320,6 +320,10 @@ export class BridgeClient {
         detached: true,
         stdio: 'ignore',
         shell: process.platform === 'win32',
+        env: {
+          ...process.env,
+          ...(this.authToken ? { BRIDGE_AUTH_TOKEN: this.authToken } : {}),
+        },
       });
       child.unref();
       const deadline = Date.now() + 4000;

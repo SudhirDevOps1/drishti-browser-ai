@@ -1158,10 +1158,18 @@ async function takeScreenshot(payload: Record<string, unknown>): Promise<unknown
         (await resolveDefaultTabId()) ||
         (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
       if (targetTabId) {
-        const cdpShot = await cdpSession.sendCommand<{ data?: string }>(targetTabId, 'Page.captureScreenshot', {
-          format: format === 'jpeg' ? 'jpeg' : 'png',
-          ...(format === 'jpeg' ? { quality } : {}),
-        });
+        let shotTimer: ReturnType<typeof setTimeout> | null = null;
+        const cdpShot = (await Promise.race([
+          cdpSession.sendCommand<{ data?: string }>(targetTabId, 'Page.captureScreenshot', {
+            format: format === 'jpeg' ? 'jpeg' : 'png',
+            ...(format === 'jpeg' ? { quality } : {}),
+          }),
+          new Promise<null>((resolve) => {
+            shotTimer = setTimeout(() => resolve(null), 4000);
+          }),
+        ]).finally(() => {
+          if (shotTimer !== null) clearTimeout(shotTimer);
+        })) as { data?: string } | null;
         if (cdpShot?.data) {
           return { base64: cdpShot.data, format, size: cdpShot.data.length };
         }
@@ -1598,7 +1606,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     if (tab?.url) hostname = new URL(tab.url).hostname;
   } catch {}
   const refSelector = payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null;
-  const resolvedInputSelector = (payload.selector as string) || refSelector;
+  const resolvedInputSelector = refSelector || (payload.selector as string) || null;
   const learnedSel = await lookupLearnedSelector(hostname, resolvedInputSelector);
 
   await yieldIfHumanActive();
@@ -1764,9 +1772,14 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
       await waitScrollSettle(el);
       const rect = el.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) {
+      const cs = window.getComputedStyle(el);
+      if (rect.width < 1 || rect.height < 1 || cs.visibility === 'hidden' || cs.display === 'none') {
         throw new Error(`Element matched "${selector || 'target'}" is not visible (0x0)`);
       }
+      const cx0 = Math.round(rect.left + rect.width / 2);
+      const cy0 = Math.round(rect.top + rect.height / 2);
+      const hitEl = document.elementFromPoint(cx0, cy0);
+      const coveredByOverlay = Boolean(hitEl && hitEl !== el && !el.contains(hitEl) && !hitEl.contains(el));
 
       // G3: Resolve human label (never fall back to CSS selector)
       const resolveLabel = (node: HTMLElement): string => {
@@ -1856,6 +1869,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
         selfHealed,
         resolvedSelector,
         matchedText: rawLabel,
+        coveredByOverlay,
       };
     },
     args: [
@@ -1907,61 +1921,128 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
   const cursorMs = Date.now() - cursorT0;
 
   const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
-  const cdpOk = await trustedCdpClick(target, prep.x, prep.y, isDoubleClick);
+  const waitForSelector = typeof payload.waitForSelector === 'string' ? payload.waitForSelector : null;
+  const waitForUrlChange = Boolean(payload.waitForUrlChange);
 
-  const clickRes = await chrome.scripting.executeScript({
-    target: { tabId: target },
-    func: async (selector: string | null, x: number | null, y: number | null, alreadyCdpClicked: boolean, dbl: boolean) => {
-      const el =
-        (document.querySelector('[data-drishti-pending-click="1"]') as HTMLElement | null) ||
-        (selector ? (document.querySelector(selector) as HTMLElement | null) : null) ||
-        (x !== null && y !== null ? (document.elementFromPoint(x, y) as HTMLElement | null) : null);
-      const prevExpanded = el?.getAttribute('aria-expanded');
-      const prevChecked = el instanceof HTMLInputElement ? el.checked : null;
-      const prevBodyLen = document.body?.innerText?.length || 0;
+  let navSawLoading = false;
+  let navCompleted = false;
+  let navObservedUrl = '';
+  const onClickTabUpdated = (updatedId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+    if (updatedId !== target) return;
+    if (changeInfo.status === 'loading') {
+      navSawLoading = true;
+    }
+    if (changeInfo.status === 'complete' && navSawLoading) {
+      navCompleted = true;
+      navObservedUrl = tab.url || changeInfo.url || navObservedUrl;
+    }
+  };
+  chrome.tabs.onUpdated.addListener(onClickTabUpdated);
 
-      if (el) {
-        el.removeAttribute('data-drishti-pending-click');
-        if (!alreadyCdpClicked) {
-          if (dbl) {
-            el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
-          } else {
-            el.click();
+  let clickRes: Array<{ result?: { verified?: boolean; isNavLink?: boolean } }> = [];
+  let postUrl = preUrl;
+  try {
+    const cdpOk = (prep as { coveredByOverlay?: boolean }).coveredByOverlay
+      ? false
+      : await trustedCdpClick(target, prep.x, prep.y, isDoubleClick);
+
+    clickRes = await chrome.scripting.executeScript({
+      target: { tabId: target },
+      func: async (selector: string | null, x: number | null, y: number | null, alreadyCdpClicked: boolean, dbl: boolean) => {
+        const el =
+          (document.querySelector('[data-drishti-pending-click="1"]') as HTMLElement | null) ||
+          (selector ? (document.querySelector(selector) as HTMLElement | null) : null) ||
+          (x !== null && y !== null ? (document.elementFromPoint(x, y) as HTMLElement | null) : null);
+        const prevExpanded = el?.getAttribute('aria-expanded');
+        const prevChecked = el instanceof HTMLInputElement ? el.checked : null;
+        const prevBodyLen = document.body?.innerText?.length || 0;
+
+        const isNavLink = Boolean(
+          el && (el.tagName === 'A' && el.getAttribute('href') && !el.getAttribute('href')!.startsWith('#')) ||
+          el?.closest('a[href]:not([href^="#"])')
+        );
+
+        if (el) {
+          el.removeAttribute('data-drishti-pending-click');
+          if (!alreadyCdpClicked) {
+            if (dbl) {
+              el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            } else {
+              el.click();
+            }
           }
         }
+
+        await new Promise((r) => setTimeout(r, 80));
+        const changed =
+          !el ||
+          !el.isConnected ||
+          el.getAttribute('aria-expanded') !== prevExpanded ||
+          (el instanceof HTMLInputElement && el.checked !== prevChecked) ||
+          (document.body?.innerText?.length || 0) !== prevBodyLen;
+        return { verified: Boolean(el) || changed, isNavLink };
+      },
+      args: [resolvedInputSelector, (payload.x as number) ?? null, (payload.y as number) ?? null, cdpOk, isDoubleClick],
+    });
+
+    if (prep.selfHealed && prep.resolvedSelector && hostname && payload.selector) {
+      await recordLearnedSelector(hostname, String(payload.selector), String(prep.resolvedSelector));
+    }
+
+    const triggeredNav = Boolean(clickRes[0]?.result?.isNavLink);
+    postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || preUrl;
+
+    if (waitForUrlChange || waitForSelector || triggeredNav) {
+      const waitDeadline = Date.now() + 4500;
+      while (Date.now() < waitDeadline) {
+        const tabState = await chrome.tabs.get(target).catch(() => null);
+        postUrl = navObservedUrl || tabState?.url || postUrl;
+        const urlOk = !waitForUrlChange || (postUrl !== preUrl && (navCompleted || tabState?.status === 'complete'));
+        const ready =
+          (navCompleted || tabState?.status === 'complete') &&
+          (await chrome.scripting
+            .executeScript({
+              target: { tabId: target },
+              func: (sel: string | null) =>
+                document.readyState === 'complete' && (!sel || Boolean(document.querySelector(sel))),
+              args: [waitForSelector],
+            })
+            .then((r) => Boolean(r[0]?.result))
+            .catch(() => false));
+        if (ready && urlOk) {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 120));
       }
-
-      await new Promise((r) => setTimeout(r, 80));
-      const changed =
-        !el ||
-        !el.isConnected ||
-        el.getAttribute('aria-expanded') !== prevExpanded ||
-        (el instanceof HTMLInputElement && el.checked !== prevChecked) ||
-        (document.body?.innerText?.length || 0) !== prevBodyLen;
-      return { verified: Boolean(el) || changed };
-    },
-    args: [resolvedInputSelector, (payload.x as number) ?? null, (payload.y as number) ?? null, cdpOk, isDoubleClick],
-  });
-
-  if (prep.selfHealed && prep.resolvedSelector && hostname && payload.selector) {
-    await recordLearnedSelector(hostname, String(payload.selector), String(prep.resolvedSelector));
+    }
+  } finally {
+    chrome.tabs.onUpdated.removeListener(onClickTabUpdated);
   }
-  const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
-  const verified = Boolean(clickRes[0]?.result?.verified) || postUrl !== preUrl;
+
+  const verified =
+    (Boolean(clickRes[0]?.result?.verified) || postUrl !== preUrl) &&
+    (!waitForUrlChange || postUrl !== preUrl);
   const totalMs = Date.now() - clickStartedAt;
+  const includeDetails = Boolean(payload.includeDetails || payload.verbose);
 
   return {
     ok: true,
     action: isDoubleClick ? 'double_click' : 'click',
     target: humanTarget,
-    rect: {
-      x: Math.round(prep.rect.left),
-      y: Math.round(prep.rect.top),
-      w: Math.round(prep.rect.width),
-      h: Math.round(prep.rect.height),
-    },
+    diff: 'summary',
+    ...(postUrl !== preUrl ? { url: postUrl } : {}),
+    ...(includeDetails
+      ? {
+          rect: {
+            x: Math.round(prep.rect.left),
+            y: Math.round(prep.rect.top),
+            w: Math.round(prep.rect.width),
+            h: Math.round(prep.rect.height),
+          },
+          timings: { locateMs, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
+        }
+      : {}),
     verified,
-    timings: { locateMs, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
     ms: totalMs,
   };
 }
@@ -2032,7 +2113,8 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     (payload.selector as string) || (payload.ref ? `[data-drishti-ref="${String(payload.ref)}"]` : null);
   const textToType = String(payload.text ?? '');
   const clearFirst = Boolean(payload.clearFirst ?? payload.clear);
-  const instantType = Boolean(payload.instant);
+  const simulateKeys = Boolean(payload.simulateKeys);
+  const instantType = !simulateKeys && (Boolean(payload.instant) || textToType.length <= 60);
 
   const prepTypeRes = await chrome.scripting.executeScript({
     target: { tabId: target },
@@ -2073,21 +2155,8 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
 
       const r0 = el.getBoundingClientRect();
       if (r0.top < 24 || r0.bottom > window.innerHeight - 24) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-        await new Promise<void>((resolve) => {
-          let lastTop = r0.top;
-          let stable = 0;
-          const started = performance.now();
-          const tick = () => {
-            const r = el!.getBoundingClientRect();
-            if (Math.abs(r.top - lastTop) < 0.75) stable++;
-            else stable = 0;
-            lastTop = r.top;
-            if (stable >= 3 || performance.now() - started > 450) resolve();
-            else requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-        });
+        el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        await new Promise<void>((resolve) => setTimeout(resolve, 40));
       }
 
       el.setAttribute('data-drishti-pending-type', '1');
@@ -2241,12 +2310,17 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
   });
 
   const typeRes = results[0]?.result;
+  if (payload.pressEnter === true) {
+    await pressKey({ tabId: target, key: 'Enter' }).catch(() => {});
+  }
   const durationMs = Date.now() - typeStartedAt;
+  const includeDetails = Boolean(payload.includeDetails || payload.verbose);
   return {
     ok: true,
     action: 'type',
     target: humanField,
-    ...(typePrep
+    diff: 'summary',
+    ...(includeDetails && typePrep
       ? {
           rect: {
             x: Math.round(typePrep.rect.left),
@@ -2254,13 +2328,12 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
             w: Math.round(typePrep.rect.width),
             h: Math.round(typePrep.rect.height),
           },
+          timings: { locateMs: 0, cursorMs: 0, executeMs: durationMs, verifyMs: 0 },
         }
       : {}),
     verified: Boolean(typeRes?.verified),
     animated: Boolean(typeRes?.animated ?? !instantType),
     chars: typeRes?.chars ?? textToType.length,
-    timings: { locateMs: 0, cursorMs: 0, executeMs: durationMs, verifyMs: 0 },
-    durationMs,
     ms: durationMs,
   };
 }
@@ -2333,19 +2406,25 @@ async function scrollPage(payload: Record<string, unknown>): Promise<ActionResul
   const cursorMs = Date.now() - cursorT0;
   const totalMs = Date.now() - startedAt;
 
+  const includeDetails = Boolean(payload.includeDetails || payload.verbose);
   return {
     ok: true,
     action: 'scroll',
     target: `${direction} ${amount}px`,
+    diff: 'summary',
     scrollY: scrollRes?.newY ?? 0,
     verified: Boolean(scrollRes?.verified),
-    timings: { locateMs: 0, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
     ms: totalMs,
-    details: {
-      prevY: scrollRes?.prevY ?? 0,
-      newY: scrollRes?.newY ?? 0,
-      scrollPct: pct,
-    },
+    ...(includeDetails
+      ? {
+          timings: { locateMs: 0, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
+          details: {
+            prevY: scrollRes?.prevY ?? 0,
+            newY: scrollRes?.newY ?? 0,
+            scrollPct: pct,
+          },
+        }
+      : {}),
   };
 }
 

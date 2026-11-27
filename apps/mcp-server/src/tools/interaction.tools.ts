@@ -15,6 +15,9 @@ const ClickSchema = z.object({
   y: z.number().optional().describe('Y coordinate to click (used when no selector/ref provided).'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   button: z.enum(['left', 'right', 'middle']).optional().describe('Mouse button to use. Default: left.'),
+  waitForUrlChange: z.boolean().optional().describe('Wait for URL change after clicking a navigation/filter link.'),
+  waitForSelector: z.string().optional().describe('Optional selector to wait for after clicking.'),
+  includeDetails: z.boolean().optional().describe('Include rect/timings metadata. Default: false (summary diff).'),
 });
 
 const DoubleClickSchema = z.object({
@@ -37,7 +40,10 @@ const TypeSchema = z.object({
   ref: z.string().optional().describe('Semantic @eN ref from browser_snapshot.'),
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   clearFirst: z.boolean().optional().describe('Clear existing content before typing. Default: false.'),
-  instant: z.boolean().optional().describe('Insert text immediately without key-by-key delay. Auto-enabled for long text (>40 chars).'),
+  instant: z.boolean().optional().describe('Insert text immediately without key-by-key delay. Default: true for <=60 chars.'),
+  simulateKeys: z.boolean().optional().describe('Force key-by-key typing animation. Default: false.'),
+  pressEnter: z.boolean().optional().describe('Press Enter after typing. Default: false.'),
+  includeDetails: z.boolean().optional().describe('Include rect/timings metadata. Default: false (summary diff).'),
 });
 
 const FillSchema = z.object({

@@ -22,8 +22,20 @@ function readRootVersion(): string {
   }
 }
 
+function readLocalToken(): string {
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const tokenPath = path.resolve(dir, '../../../.drishti-token');
+    if (fs.existsSync(tokenPath)) {
+      const val = fs.readFileSync(tokenPath, 'utf8').trim();
+      if (val) return val;
+    }
+  } catch {}
+  return '';
+}
+
 const PORT = parseInt(process.env.BRIDGE_WS_PORT || '7483', 10);
-const AUTH_TOKEN = process.env.BRIDGE_AUTH_TOKEN || generateAuthToken();
+const AUTH_TOKEN = process.env.BRIDGE_AUTH_TOKEN || readLocalToken() || generateAuthToken();
 const VERSION = readRootVersion();
 
 logger.info(`Starting Drishti Browser AI Bridge v${VERSION}${IS_NATIVE_HOST ? ' [Native Host]' : ''}`);

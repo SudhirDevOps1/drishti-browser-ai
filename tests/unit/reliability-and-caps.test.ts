@@ -241,11 +241,37 @@ describe('Safety, PII Redaction & Audit Log', () => {
     expect(auditLogger).toContain('opts.outcome');
     expect(auditLogger).toContain('opts.since');
 
-    // Verify WAIT_FOR timeoutMs + 25s cap, zero-rect click guard, and compact path screenshot
+    // Verify WAIT_FOR timeoutMs + 25s cap, zero-rect click guard, compact path screenshot, fast type & summary diffs
     expect(bgSource).toContain('payload.timeoutMs ?? payload.timeout');
     expect(bgSource).toContain('is not visible (0x0)');
     expect(bgSource).toContain('tabId: tab.id');
     expect(bgSource).toContain('scrollIntoView({ behavior:');
+    expect(bgSource).toContain('textToType.length <= 60');
+    expect(bgSource).toContain("diff: 'summary'");
     expect(browserTools).toContain('params.inline !== true');
+
+    // Verify single-source token reader in both local-bridge and mcp-server
+    const bridgeIdx = readFileSync(join(ROOT, 'apps/local-bridge/src/index.ts'), 'utf8');
+    const mcpIdx = readFileSync(join(ROOT, 'apps/mcp-server/src/index.ts'), 'utf8');
+    const compositeTools = readFileSync(join(ROOT, 'apps/mcp-server/src/tools/composite.tools.ts'), 'utf8');
+    expect(bridgeIdx).toContain('readLocalToken');
+    expect(mcpIdx).toContain('readLocalToken');
+    expect(bgSource).toContain('coveredByOverlay');
+    expect(bgSource).toContain('navSawLoading');
+    expect(compositeTools).toContain('writeFileSync(savedPath, buf)');
+    expect(compositeTools).toContain("evaluate: 'EVALUATE'");
+    expect(compositeTools).toContain("read: 'READ_PAGE'");
+    expect(compositeTools).toContain("grep: 'GREP_PAGE'");
+
+    // Selector precision: repo link filter excludes /topics/, /search/, and nav links
+    const filterRepoLinks = (links: Array<{ href: string; inNav: boolean }>) =>
+      links.filter((l) => !l.inNav && !/\/(topics|search)(\/|\?|$)/i.test(l.href));
+    const filtered = filterRepoLinks([
+      { href: 'https://github.com/topics/typescript', inNav: false },
+      { href: 'https://github.com/search?q=mcp', inNav: false },
+      { href: 'https://github.com/trending', inNav: true },
+      { href: 'https://github.com/owner/repo', inNav: false },
+    ]);
+    expect(filtered).toEqual([{ href: 'https://github.com/owner/repo', inNav: false }]);
   });
 });
