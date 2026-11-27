@@ -5,16 +5,15 @@ Drishti Browser AI is designed from the ground up as a **100% local-first, zero-
 ---
 
 ## 1. Local-Only Transport (No Cloud Relay)
-- **WebSocket Bridge (`127.0.0.1:7483`)**: The local bridge binds strictly to `localhost` (`127.0.0.1`). No external network ports are opened.
-- **SHA-256 Auth Handshake**: Every connection from the Chrome extension, MCP Server, or CLI (`scripts/drishti-exec.mjs`) must authenticate with the 64-character hex token. Unauthenticated clients are rejected with code `4002` / `4003`.
+- **Native Messaging + Named Pipe (`com.drishti.bridge` / `\\.\pipe\drishti-bridge`)**: Primary transport uses OS-level stdio & user-scoped Named Pipes authenticated by Chromium's `allowed_origins` Extension ID (`odkkfmhjfeajecjabjaliglinfbaaege`) — zero external ports or token copy-paste.
+- **WebSocket Fallback (`127.0.0.1:7483`)**: When WebSocket fallback is used, it binds strictly to `localhost` (`127.0.0.1`) with constant-time 64-char hex token verification (`4002`/`4003` on failure).
 - **Zero Telemetry / Analytics**: Drishti sends zero usage metrics, crash reports, or DOM snapshots to any external server.
 
 ---
 
 ## 2. Strict On-Demand Execution (No Background Persistence)
 - **No Auto-Start Scripts**: Drishti does **not** install Windows Startup shortcuts, scheduled tasks, or silent background services.
-- **User-Controlled Lifecycle**: The local bridge (`pnpm bridge:start`) and MCP server run **only when you explicitly start them** and stop immediately when you close the terminal or press `Ctrl+C`.
-- **Smart Exponential Backoff**: When the bridge is off, the extension uses progressive backoff (`3s → 6s → 15s → 30s`) so it consumes negligible resources and avoids console noise.
+- **Browser-Managed Lifecycle**: With Native Messaging, Chrome/Brave/Edge spawns the host only while the extension connects and shuts it down on browser exit. In WebSocket fallback mode, `pnpm bridge:start` runs only when you start it.
 
 ---
 

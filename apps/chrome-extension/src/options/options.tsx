@@ -29,11 +29,56 @@ import '../styles.css';
 
 type SettingsTab = 'connection' | 'test-lab' | 'ai-prompt' | 'modes' | 'security' | 'diagnostics';
 
+function buildSystemPrompt(wsPort: string): string {
+  return `<SYSTEM_INSTRUCTION>
+You are an expert AI Browser Automation Agent empowered to inspect, navigate, and control the user's live browser via the Drishti Browser AI Model Context Protocol (MCP) server.
+
+## 1. PLATFORM TOPOLOGY
+- Local MCP Server: <path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js
+- Primary Transport: Native Messaging (com.drishti.bridge) + Named Pipe (\\\\.\\pipe\\drishti-bridge) — Zero-Token Auto-Start
+- Fallback Transport: WebSocket ws://127.0.0.1:${wsPort || '7483'}
+- Extension: Drishti Browser AI (v0.1.3) for Chrome, Brave, Edge & Chromium (Persistent CDP)
+- Mode: Daily browser profile with user's real sessions, cookies & logins
+
+## 2. MCP CONFIGURATION
+Add this to your MCP settings (Antigravity, OpenCode, Claude, Cursor, Codex):
+{
+  "mcpServers": {
+    "drishti-browser-ai": {
+      "command": "node",
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
+    }
+  }
+}
+
+## 0. ZERO-CLONE SETUP & NATIVE HOST INSTALL (DO NOT CLONE IF ALREADY INSTALLED)
+1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine.
+2. Inside the Drishti folder, run:
+   \`pnpm install && pnpm -r run build && pnpm native:install && pnpm setup:agent -- --client auto\`
+   - Registers Native Messaging for Chrome, Brave, Edge & Chromium (no manual bridge start or token copy-paste needed).
+   - Configures your AI client MCP entry and installs the \`drishti-browser-agent\` Skill.
+3. Tell the user to reload \`extension-ready-to-install/\` once in \`chrome://extensions\` or \`brave://extensions\`.
+
+## 3. TOKEN-EFFICIENT EXECUTION (63 MCP TOOLS)
+1. **Check Cached Workflows First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` to replay cached SQLite flows.
+2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` into ONE call.
+3. **Avoid Redundant Screenshots**: Use \`browser_observe()\`, \`browser_snapshot()\` (\`@eN\` refs), \`browser_read()\`, \`browser_grep()\`, and \`browser_evaluate()\` for targeted extraction; \`browser_screenshot({ path })\` saves to disk with compact ~50-token JSON (pass \`inline: true\` only if image bytes are needed in context), and \`browser_print_pdf({ path })\` exports PDFs.
+4. **Tab Isolation, Bridge Power & Human Handoff**: \`browser_new_tab\` returns \`tabId\`; pin your target tab with \`browser_use_tab({ tabId })\`. Users can pause AI or click **Turn OFF** in the Popup to disconnect the Native Host completely. Use \`browser_download()\`, \`browser_confirm()\`, \`browser_request_human_help({ kind, reason })\`, and \`browser_audit({ tool, outcome, since, limit })\`.
+
+## 4. SAFETY & KNOWN LIMITS
+- Never read or extract values from type="password" fields; passwords/tokens are redacted from memory.
+- Always ask user confirmation before submitting financial checkouts or payments.
+- Limits: no \`chrome://\` scripting, no cross-origin iframes, \`browser_batch_compare\` capped at 3 URLs.
+</SYSTEM_INSTRUCTION>`;
+}
+
 export function OptionsApp() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('connection');
   const [authToken, setAuthToken] = useState<string>('');
   const [showToken, setShowToken] = useState<boolean>(false);
   const [wsPort, setWsPort] = useState<string>('7483');
+  const [bridgeTransport, setBridgeTransport] = useState<'auto' | 'websocket'>('auto');
+  const [showAdvancedWs, setShowAdvancedWs] = useState<boolean>(false);
   const [automationMode, setAutomationMode] = useState<string>('auto');
   const [browserMode, setBrowserMode] = useState<string>('existing');
   const [allowlist, setAllowlist] = useState<string>('*');
@@ -78,6 +123,7 @@ export function OptionsApp() {
       [
         'bridgeAuthToken',
         'bridgeWsPort',
+        'bridgeTransport',
         'automationMode',
         'browserMode',
         'domainAllowlist',
@@ -86,6 +132,9 @@ export function OptionsApp() {
       (res) => {
         if (res.bridgeAuthToken) setAuthToken(res.bridgeAuthToken);
         if (res.bridgeWsPort) setWsPort(String(res.bridgeWsPort));
+        if (res.bridgeTransport === 'websocket' || res.bridgeTransport === 'auto') {
+          setBridgeTransport(res.bridgeTransport);
+        }
         if (res.automationMode) setAutomationMode(res.automationMode);
         if (res.browserMode) setBrowserMode(res.browserMode);
         if (res.domainAllowlist) setAllowlist(res.domainAllowlist);
@@ -99,6 +148,7 @@ export function OptionsApp() {
       {
         bridgeAuthToken: authToken.trim(),
         bridgeWsPort: parseInt(wsPort, 10) || 7483,
+        bridgeTransport,
         automationMode,
         browserMode,
         domainAllowlist: allowlist.trim(),
@@ -211,52 +261,7 @@ export function OptionsApp() {
   };
 
   const handleCopyPrompt = () => {
-    const prompt = `<SYSTEM_INSTRUCTION>
-You are an expert AI Browser Automation Agent empowered to inspect, navigate, and control the user's live browser via the Drishti Browser AI Model Context Protocol (MCP) server.
-
-## 1. PLATFORM TOPOLOGY
-- Local MCP Server: <path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js
-- WebSocket Bridge: ws://127.0.0.1:${wsPort || '7483'}
-- Bridge Auth Token: ${authToken || 'YOUR_AUTH_TOKEN'}
-- Chrome Extension: Drishti Browser AI (v0.1.3 PRO)
-- Mode: Mode A (Daily Chrome profile with user's real sessions, cookies & logins)
-
-## 2. MCP CONFIGURATION
-Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MCP Settings):
-{
-  "mcpServers": {
-    "drishti-browser-ai": {
-      "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "${authToken || 'YOUR_AUTH_TOKEN'}",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:${wsPort || '7483'}"
-      }
-    }
-  }
-}
-
-## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
-1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\`). If found but \`scripts/setup-agent.mjs\` is missing, update it in place (\`git pull origin main && pnpm install && pnpm -r run build\`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
-2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
-   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
-3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
-4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
-5. **MUST print the full 64-character auth token from \`.drishti-token\` clearly in your reply to me** so I can paste it into Extension Settings -> Connection & Bridge -> Save Changes -> Run Ping.
-
-## 3. TOKEN-EFFICIENT EXECUTION (v0.1.3 RELIABILITY PROTOCOL)
-1. **Check Cached Workflows First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` to replay cached SQLite flows.
-2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` into ONE call (compact before/after diffs, 30s budget, auto-caches on success).
-3. **Avoid Redundant Screenshots**: Call \`browser_observe()\` or \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` if lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is enabled.
-4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to debug failures.
-
-## 4. SAFETY & KNOWN LIMITS
-- Never read or extract values from type="password" fields; passwords/tokens are redacted from memory.
-- Always ask user confirmation before submitting financial checkouts or payments.
-- Limits: no \`chrome://\` scripting, no built-in PDF text, no cross-origin iframes, viewport-only screenshots, \`browser_batch_compare\` capped at 3 URLs.
-</SYSTEM_INSTRUCTION>`;
-
-    navigator.clipboard.writeText(prompt);
+    navigator.clipboard.writeText(buildSystemPrompt(wsPort));
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2500);
   };
@@ -288,10 +293,10 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-sm tracking-tight text-white">Drishti Browser AI</span>
                 <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                  PRO v0.1.0
+                  v0.1.3
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Enterprise MCP Browser Gateway</p>
+              <p className="text-[11px] text-slate-400 font-medium">Native MCP Browser Gateway (Chrome, Brave, Edge)</p>
             </div>
           </div>
 
@@ -346,9 +351,9 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
             </div>
 
             {[
-              { id: 'connection', label: 'Connection & Bridge', icon: Key, badge: 'Required' },
+              { id: 'connection', label: 'Connection & Bridge', icon: Key, badge: 'Auto' },
               { id: 'test-lab', label: 'Interactive Live Test Lab', icon: FlaskConical, badge: 'LIVE' },
-              { id: 'ai-prompt', label: 'AI Agent Auto-Connect', icon: Sparkles, badge: 'PRO' },
+              { id: 'ai-prompt', label: 'AI Agent Auto-Connect', icon: Sparkles, badge: 'v0.1.3' },
               { id: 'modes', label: 'Automation Scopes', icon: Sliders },
               { id: 'security', label: 'Security & Boundaries', icon: Shield },
               { id: 'diagnostics', label: 'Telemetry & Status', icon: Activity },
@@ -753,57 +758,14 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
                   <div className="flex items-center justify-between text-xs text-slate-300">
                     <span className="font-bold flex items-center gap-1.5">
                       <Terminal className="w-4 h-4 text-blue-400" />
-                      Ready-to-Paste System Prompt (Includes your configured token):
+                      Ready-to-Paste System Prompt (Zero-Token Native Pipe):
                     </span>
-                    <span className="text-[10px] text-slate-500">Auto-filled with active token & port</span>
+                    <span className="text-[10px] text-slate-500">Auto-connects via com.drishti.bridge</span>
                   </div>
 
                   <div className="relative">
                     <pre className="p-4 rounded-xl bg-[#060a12] border border-slate-800 text-cyan-300 font-mono text-[11px] leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-all">
-{`<SYSTEM_INSTRUCTION>
-You are an expert AI Browser Automation Agent empowered to inspect, navigate, and control the user's live browser via the Drishti Browser AI Model Context Protocol (MCP) server.
-
-## 1. PLATFORM TOPOLOGY
-- Local MCP Server: <path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js
-- WebSocket Bridge: ws://127.0.0.1:${wsPort || '7483'}
-- Bridge Auth Token: ${authToken || 'YOUR_AUTH_TOKEN'}
-- Chrome Extension: Drishti Browser AI (v0.1.3 PRO)
-- Mode: Mode A (Daily Chrome profile with user's real sessions, cookies & logins)
-
-## 2. MCP CONFIGURATION
-Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MCP Settings):
-{
-  "mcpServers": {
-    "drishti-browser-ai": {
-      "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "${authToken || 'YOUR_AUTH_TOKEN'}",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:${wsPort || '7483'}"
-      }
-    }
-  }
-}
-
-## 0. ZERO-CLONE SETUP & SKILL AUTO-LOAD (DO NOT CLONE IF ALREADY INSTALLED)
-1. First check if Drishti Browser AI is already on disk (look for \`apps/mcp-server/dist/index.js\`). If found but \`scripts/setup-agent.mjs\` is missing, update it in place (\`git pull origin main && pnpm install && pnpm -r run build\`). Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder if it is NOT installed anywhere on this machine — NEVER clone it inside an unrelated user project!
-2. Inside the Drishti folder, run: \`node scripts/setup-agent.mjs --client auto --port ${wsPort || '7483'}${authToken ? ` --token ${authToken}` : ''}\` (or specify \`--client antigravity|gemini|opencode|claude|cursor|codex\`)
-   - This automatically generates \`.drishti-token\` (if missing), registers \`drishti-browser-ai\` in your active AI client's MCP config, and installs the \`drishti-browser-agent\` Skill so it loads automatically.
-3. Start the Local Bridge on-demand (\`pnpm bridge:start\`, never install OS auto-start scripts).
-4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
-5. **MUST print the full 64-character auth token from \`.drishti-token\` clearly in your reply to me** so I can paste it into Extension Settings -> Connection & Bridge -> Save Changes -> Run Ping.
-
-## 3. TOKEN-EFFICIENT EXECUTION (v0.1.3 RELIABILITY PROTOCOL)
-1. **Check Cached Workflows First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` to replay cached SQLite flows.
-2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` into ONE call (compact before/after diffs, 30s budget, auto-caches on success).
-3. **Avoid Redundant Screenshots**: Call \`browser_observe()\` or \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` if lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is enabled.
-4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to debug failures.
-
-## 4. SAFETY & KNOWN LIMITS
-- Never read or extract values from type="password" fields; passwords/tokens are redacted from memory.
-- Always ask user confirmation before submitting financial checkouts or payments.
-- Limits: no \`chrome://\` scripting, no built-in PDF text, no cross-origin iframes, viewport-only screenshots, \`browser_batch_compare\` capped at 3 URLs.
-</SYSTEM_INSTRUCTION>`}
+                      {buildSystemPrompt(wsPort)}
                     </pre>
 
                     <button
@@ -824,10 +786,10 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
                   <div>
                     <h2 className="text-base font-extrabold text-white flex items-center gap-2">
                       <Key className="w-5 h-5 text-cyan-400" />
-                      Local MCP Bridge Authentication
+                      Native Browser Bridge (Zero-Token)
                     </h2>
                     <p className="text-xs text-slate-400 mt-1">
-                      Exchange security tokens to ensure only authorized AI agents running on localhost can inspect and control your browser.
+                      Auto-connects via OS Native Messaging (<code className="text-cyan-400 font-mono">com.drishti.bridge</code>) &amp; Named Pipe across Chrome, Brave, Edge, and Chromium.
                     </p>
                   </div>
 
@@ -868,85 +830,119 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
                 )}
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                      Bridge Secret Token (64-character SHA-256)
-                    </label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <input
-                          type={showToken ? 'text' : 'password'}
-                          value={authToken}
-                          onChange={(e) => {
-                            setAuthToken(e.target.value);
-                            setHasChanges(true);
-                          }}
-                          placeholder="Paste token printed by local bridge process..."
-                          className="w-full bg-[#060a12] border border-slate-700/90 rounded-xl px-4 py-2.5 font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowToken(!showToken)}
-                          className="absolute right-3 top-2.5 text-slate-400 hover:text-white transition"
-                        >
-                          {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const bytes = new Uint8Array(32);
-                          crypto.getRandomValues(bytes);
-                          const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-                          setAuthToken(hex);
-                          setShowToken(true);
-                          setHasChanges(true);
-                        }}
-                        className="btn-interactive px-3.5 py-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-1.5"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        <span>Generate</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handlePasteClipboard}
-                        className="btn-interactive px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Paste</span>
-                      </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/25">
+                      <div className="text-xs font-bold text-emerald-300">Primary Transport: Native Pipe</div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Run <code className="text-cyan-300 font-mono">pnpm native:install</code> once. No auth token copy-paste or manual <code className="text-cyan-300 font-mono">pnpm bridge:start</code> required.
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-                      This token is printed in stdout when you start the bridge (<code className="text-cyan-400 font-mono">node dist/index.js</code>). It guarantees that untrusted scripts cannot hijack your browser session.
-                    </p>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4 pt-2">
                     <div>
                       <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                        WebSocket Port
+                        Transport Mode
                       </label>
-                      <input
-                        type="number"
-                        value={wsPort}
+                      <select
+                        value={bridgeTransport}
                         onChange={(e) => {
-                          setWsPort(e.target.value);
+                          setBridgeTransport(e.target.value as 'auto' | 'websocket');
                           setHasChanges(true);
                         }}
-                        className="w-full bg-[#060a12] border border-slate-700/90 rounded-xl px-4 py-2 font-mono text-slate-100 text-xs focus:outline-none focus:border-blue-500"
-                      />
-                      <span className="text-[10px] text-slate-500 mt-1 block">Default: 7483</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                        Protocol Transport
-                      </label>
-                      <div className="bg-[#060a12] border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-400 font-mono">
-                        ws://127.0.0.1:{wsPort}
-                      </div>
+                        className="w-full bg-[#060a12] border border-slate-700/90 rounded-xl px-4 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="auto">Auto (Native Messaging First, WS Fallback)</option>
+                        <option value="websocket">WebSocket Only (ws://127.0.0.1:{wsPort})</option>
+                      </select>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedWs(!showAdvancedWs)}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-cyan-300 transition pt-1"
+                  >
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAdvancedWs ? 'rotate-90' : ''}`} />
+                    <span>Advanced / WebSocket Fallback Settings (Optional)</span>
+                  </button>
+
+                  {showAdvancedWs && (
+                    <div className="space-y-4 p-4 rounded-xl bg-[#060a12]/70 border border-slate-800/80">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                          Fallback WebSocket Token (64-hex, optional)
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showToken ? 'text' : 'password'}
+                              value={authToken}
+                              onChange={(e) => {
+                                setAuthToken(e.target.value);
+                                setHasChanges(true);
+                              }}
+                              placeholder="Only needed if using WebSocket fallback without Native Host..."
+                              className="w-full bg-[#060a12] border border-slate-700/90 rounded-xl px-4 py-2.5 font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 text-xs pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowToken(!showToken)}
+                              className="absolute right-3 top-2.5 text-slate-400 hover:text-white transition"
+                            >
+                              {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const bytes = new Uint8Array(32);
+                              crypto.getRandomValues(bytes);
+                              const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+                              setAuthToken(hex);
+                              setShowToken(true);
+                              setHasChanges(true);
+                            }}
+                            className="btn-interactive px-3.5 py-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-1.5"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            <span>Generate</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handlePasteClipboard}
+                            className="btn-interactive px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Paste</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                            WebSocket Port
+                          </label>
+                          <input
+                            type="number"
+                            value={wsPort}
+                            onChange={(e) => {
+                              setWsPort(e.target.value);
+                              setHasChanges(true);
+                            }}
+                            className="w-full bg-[#060a12] border border-slate-700/90 rounded-xl px-4 py-2 font-mono text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-200 mb-1.5">
+                            Fallback Endpoint
+                          </label>
+                          <div className="bg-[#060a12] border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-400 font-mono">
+                            ws://127.0.0.1:{wsPort}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

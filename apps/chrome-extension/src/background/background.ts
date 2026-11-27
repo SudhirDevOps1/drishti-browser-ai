@@ -1,11 +1,17 @@
-// Background Service Worker — connects to local bridge via WebSocket
+// Background Service Worker — connects to local bridge via Native Messaging or WebSocket
 // and handles all Chrome API calls on behalf of the MCP server
 
+import { cdpSession } from './cdp-session';
+
 const BRIDGE_WS_URL = 'ws://127.0.0.1:7483';
+const NATIVE_HOST_NAME = 'com.drishti.bridge';
 const RECONNECT_BACKOFF_MS = [3000, 6000, 15000, 30000];
 const AUTH_TOKEN_KEY = 'bridgeAuthToken';
 
 let socket: WebSocket | null = null;
+let nativePort: chrome.runtime.Port | null = null;
+let activeTransport: 'native' | 'websocket' | null = null;
+let bridgeEnabled = true;
 let isConnected = false;
 let taskAborted = false;
 let reconnectAttempts = 0;
@@ -23,13 +29,171 @@ async function getAuthToken(): Promise<string> {
   });
 }
 
+function sendBridgeMessage(payload: unknown): boolean {
+  if (activeTransport === 'native' && nativePort) {
+    try {
+      nativePort.postMessage(payload);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    try {
+      socket.send(JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+async function handleBridgeIncoming(msg: any): Promise<void> {
+  if (!msg || typeof msg !== 'object') return;
+
+  if (msg.type === 'pong') {
+    return;
+  }
+
+  if (msg.type === 'response' && msg.id && pendingBridgeDispatches.has(msg.id)) {
+    const d = pendingBridgeDispatches.get(msg.id)!;
+    pendingBridgeDispatches.delete(msg.id);
+    if (msg.error) d.reject(new Error(msg.error));
+    else d.resolve(msg.result);
+    return;
+  }
+
+  if (msg.type === 'mission_update' && msg.mission) {
+    const m = msg.mission;
+    broadcastAction(
+      `Agent Mission [${String(m.status).toUpperCase()}]: ${m.summary || m.prompt?.slice(0, 60) || m.id}`,
+      'AGENT',
+      m.status === 'failed' ? 'error' : m.status === 'completed' ? 'success' : 'pending'
+    );
+    return;
+  }
+
+  if (msg.id && (msg.action || msg.type === 'command')) {
+    const action = msg.action || msg.payload?.action;
+    try {
+      const result = await handleCommand(action, msg.payload || {});
+      sendBridgeMessage({ type: 'response', id: msg.id, result });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err.message : String(err);
+      sendBridgeMessage({ type: 'response', id: msg.id, error });
+    }
+  }
+}
+
+async function disconnectBridge(): Promise<void> {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+  if (nativePort) {
+    try { nativePort.disconnect(); } catch {}
+    nativePort = null;
+  }
+  if (socket) {
+    try {
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.onmessage = null;
+      socket.close();
+    } catch {}
+    socket = null;
+  }
+  activeTransport = null;
+  isConnected = false;
+  notifyConnectionStatus(false);
+  await cdpSession.detachAll().catch(() => {});
+}
+
 async function connectToBridge(force = false): Promise<void> {
-  if (!force && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+  const cfg = await chrome.storage.local.get(['bridgeEnabled', 'bridgePort', 'bridgeTransport']).catch(() => ({} as Record<string, unknown>));
+  if (force) {
+    bridgeEnabled = true;
+    await chrome.storage.local.set({ bridgeEnabled: true }).catch(() => {});
+  } else if (cfg.bridgeEnabled === false || !bridgeEnabled) {
+    bridgeEnabled = false;
+    return;
+  }
+
+  const nativeActive = activeTransport === 'native' && nativePort !== null;
+  const wsActive = socket !== null && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN);
+  if (!force && (nativeActive || wsActive)) {
     return;
   }
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
+  }
+
+  const customPort = typeof cfg.bridgePort === 'number' && cfg.bridgePort > 0 ? cfg.bridgePort : null;
+  const preferNative = !customPort && cfg.bridgeTransport !== 'websocket' && typeof chrome?.runtime?.connectNative === 'function';
+
+  if (preferNative) {
+    if (nativePort) {
+      try { nativePort.disconnect(); } catch {}
+      nativePort = null;
+    }
+    try {
+      const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+      nativePort = port;
+      activeTransport = 'native';
+      isConnected = true;
+      reconnectAttempts = 0;
+      notifyConnectionStatus(true);
+      console.log('[Bridge] Connected via Native Messaging');
+
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(() => {
+        if (activeTransport === 'native' && nativePort) {
+          try { nativePort.postMessage({ type: 'ping' }); } catch {}
+        }
+      }, 20000);
+
+      port.onMessage.addListener((msg) => {
+        void handleBridgeIncoming(msg);
+      });
+
+      port.onDisconnect.addListener(() => {
+        const errMsg = chrome.runtime.lastError?.message || '';
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+        if (nativePort === port) {
+          nativePort = null;
+          activeTransport = null;
+          isConnected = false;
+          notifyConnectionStatus(false);
+        }
+        if (/not found|forbidden|native messaging host/i.test(errMsg)) {
+          console.log('[Bridge] Native host unavailable, falling back to WebSocket:', errMsg);
+          void connectWebSocketBridge(force, customPort);
+        } else {
+          scheduleReconnect();
+        }
+      });
+      return;
+    } catch {
+      nativePort = null;
+      activeTransport = null;
+    }
+  }
+
+  await connectWebSocketBridge(force, customPort);
+}
+
+async function connectWebSocketBridge(force = false, customPort: number | null = null): Promise<void> {
+  if (!force && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+    return;
   }
 
   authToken = await getAuthToken();
@@ -38,7 +202,6 @@ async function connectToBridge(force = false): Promise<void> {
     return;
   }
 
-  // Gracefully close any existing socket to prevent duplicates
   if (socket) {
     try {
       socket.onclose = null;
@@ -50,14 +213,13 @@ async function connectToBridge(force = false): Promise<void> {
   }
 
   try {
-    socket = new WebSocket(BRIDGE_WS_URL);
+    const wsPort = customPort || 7483;
+    socket = new WebSocket(wsPort === 7483 ? BRIDGE_WS_URL : `ws://127.0.0.1:${wsPort}`);
 
     socket.onopen = () => {
       console.log('[Bridge] Connected to local bridge');
-      // Send auth
       socket!.send(JSON.stringify({ type: 'auth', token: authToken }));
 
-      // MV3 Keep-alive heartbeat: ping bridge every 20s to prevent worker sleep
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       heartbeatTimer = setInterval(() => {
         if (socket && socket.readyState === WebSocket.OPEN) {
@@ -73,6 +235,7 @@ async function connectToBridge(force = false): Promise<void> {
         if (msg.type === 'auth_ok' || msg.type === 'auth:ok') {
           console.log('[Bridge] Handshake authenticated successfully');
           reconnectAttempts = 0;
+          activeTransport = 'websocket';
           isConnected = true;
           notifyConnectionStatus(true);
           return;
@@ -80,45 +243,14 @@ async function connectToBridge(force = false): Promise<void> {
 
         if (msg.type === 'auth_fail' || msg.type === 'auth:fail') {
           console.error('[Bridge] Auth failed. Check token in settings.');
+          activeTransport = null;
           isConnected = false;
           notifyConnectionStatus(false);
           socket?.close();
           return;
         }
 
-        if (msg.type === 'pong') {
-          return;
-        }
-
-        if (msg.type === 'response' && msg.id && pendingBridgeDispatches.has(msg.id)) {
-          const d = pendingBridgeDispatches.get(msg.id)!;
-          pendingBridgeDispatches.delete(msg.id);
-          if (msg.error) d.reject(new Error(msg.error));
-          else d.resolve(msg.result);
-          return;
-        }
-
-        if (msg.type === 'mission_update' && msg.mission) {
-          const m = msg.mission;
-          broadcastAction(
-            `Agent Mission [${String(m.status).toUpperCase()}]: ${m.summary || m.prompt?.slice(0, 60) || m.id}`,
-            'AGENT',
-            m.status === 'failed' ? 'error' : m.status === 'completed' ? 'success' : 'pending'
-          );
-          return;
-        }
-
-        // Handle command from MCP bridge
-        if (msg.id && (msg.action || msg.type === 'command')) {
-          const action = msg.action || msg.payload?.action;
-          try {
-            const result = await handleCommand(action, msg.payload || {});
-            socket?.send(JSON.stringify({ type: 'response', id: msg.id, result }));
-          } catch (err: unknown) {
-            const error = err instanceof Error ? err.message : String(err);
-            socket?.send(JSON.stringify({ type: 'response', id: msg.id, error }));
-          }
-        }
+        await handleBridgeIncoming(msg);
       } catch (err: unknown) {
         const error = err instanceof Error ? err.message : String(err);
         try {
@@ -135,6 +267,7 @@ async function connectToBridge(force = false): Promise<void> {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
       }
+      activeTransport = null;
       isConnected = false;
       socket = null;
       notifyConnectionStatus(false);
@@ -151,10 +284,27 @@ async function connectToBridge(force = false): Promise<void> {
 }
 
 async function testBridgeConnection(testToken?: string, testPort?: string | number): Promise<{ success: boolean; latency?: number; error?: string }> {
+  const customNonDefaultPort = testPort !== undefined && Number(testPort) !== 7483;
+  if (!customNonDefaultPort) {
+    if (activeTransport !== 'native' || !nativePort) {
+      await connectToBridge(false);
+    }
+    if (activeTransport === 'native' && nativePort) {
+      try {
+        nativePort.postMessage({ type: 'ping' });
+        return { success: true, latency: 1 };
+      } catch {
+        // fall through to WebSocket test if native port failed
+      }
+    }
+  }
   const tokenToTest = testToken || (await getAuthToken());
   const port = testPort || 7483;
   if (!tokenToTest) {
-    return { success: false, error: 'Auth token is empty. Enter or paste your 64-character token.' };
+    return {
+      success: false,
+      error: 'Native Messaging not active and WebSocket fallback token is empty. Run `pnpm native:install` or paste a token in Advanced.',
+    };
   }
 
   const start = performance.now();
@@ -186,8 +336,8 @@ async function testBridgeConnection(testToken?: string, testPort?: string | numb
             clearTimeout(timeout);
             const elapsed = Math.round(performance.now() - start);
             try { testWs?.close(); } catch {}
-            // Ensure persistent background connection is active without tearing down an already-open socket
-            connectToBridge(false);
+            // Ensure persistent background connection is active (force reconnect if a custom testPort was supplied)
+            connectToBridge(Boolean(testPort && Number(testPort) !== 7483));
             resolve({ success: true, latency: Math.max(1, elapsed) });
           }
         } catch {}
@@ -229,6 +379,7 @@ async function testBridgeConnection(testToken?: string, testPort?: string | numb
 }
 
 function scheduleReconnect(): void {
+  if (!bridgeEnabled) return;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   const delay = RECONNECT_BACKOFF_MS[Math.min(reconnectAttempts, RECONNECT_BACKOFF_MS.length - 1)];
   reconnectAttempts++;
@@ -302,8 +453,9 @@ function assertTabWritable(tabId: number | undefined, payload: Record<string, un
 }
 
 function notifyConnectionStatus(connected: boolean): void {
-  chrome.runtime.sendMessage({ type: 'CONNECTION_STATUS', connected }).catch(() => {});
-  chrome.storage.local.set({ bridgeConnected: connected, bridgeConnectedAt: Date.now() });
+  const badge = connected ? 'ONLINE' : 'OFFLINE';
+  chrome.runtime.sendMessage({ type: 'CONNECTION_STATUS', connected, badge }).catch(() => {});
+  chrome.storage.local.set({ bridgeConnected: connected, connectionBadge: badge, bridgeConnectedAt: Date.now() });
   try {
     chrome.action.setBadgeText({ text: connected ? 'ON' : 'OFF' }).catch(() => {});
     chrome.action.setBadgeBackgroundColor({ color: connected ? '#10B981' : '#EF4444' }).catch(() => {});
@@ -327,6 +479,12 @@ try {
   });
   chrome.runtime.onInstalled?.addListener(() => {
     connectToBridge(false);
+  });
+  // Preload content.js when HTTP(S) tabs finish loading so click/type never pay cold-inject latency
+  chrome.tabs.onUpdated?.addListener((tabId, info, tab) => {
+    if (info.status === 'complete' && tab?.url && /^https?:/i.test(tab.url)) {
+      chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {});
+    }
   });
 } catch {}
 
@@ -441,6 +599,7 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'GO_BACK':           result = await goBack(payload); break;
       case 'GO_FORWARD':        result = await goForward(payload); break;
       case 'SCREENSHOT':        result = await takeScreenshot(payload); break;
+      case 'PRINT_PDF':         result = await printPdf(payload); break;
       case 'EXECUTE_SCRIPT':    result = await executeScript(payload); break;
       case 'OBSERVE':
       case 'browser_observe':   result = await observePage(payload); break;
@@ -614,74 +773,181 @@ async function navigate(payload: Record<string, unknown>): Promise<unknown> {
   const url = payload.url as string;
   if (!url) throw new Error('url is required');
 
+  const navStart = Date.now();
   const tabId = payload.tabId as number | undefined;
   assertTabWritable(tabId, payload);
 
-  if (tabId) {
-    await chrome.tabs.update(tabId, { url });
-  } else {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('No active tab');
-    await chrome.tabs.update(tab.id, { url });
+  const resolvedTab = tabId || (await resolveDefaultTabId()) || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (!resolvedTab) throw new Error('No active tab');
+
+  // Pre-warm content script + one quick snapshot on current scriptable page before navigating
+  const preTab = await chrome.tabs.get(resolvedTab).catch(() => null);
+  const oldUrl = preTab?.url || '';
+  if (oldUrl && /^https?:/i.test(oldUrl)) {
+    await chrome.scripting.executeScript({ target: { tabId: resolvedTab }, files: ['content.js'] }).catch(() => {});
+    await getDomSnapshot({ tabId: resolvedTab }).catch(() => {});
   }
 
-  if (payload.waitForLoad) {
-    await waitForTabLoad(tabId);
-  }
-
-  const navStart = Date.now();
-  const resolvedTab = tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
-  if (resolvedTab) {
-    const tabInfo = await chrome.tabs.get(resolvedTab).catch(() => null);
-    let navLabel = tabInfo?.title?.trim() || '';
-    if (!navLabel || navLabel.length > 28) {
-      try {
-        const u = new URL(url);
-        const segs = u.pathname.split('/').filter(Boolean);
-        const lastSeg = segs[segs.length - 1] || '';
-        navLabel = lastSeg ? `${u.hostname}/${lastSeg}` : u.hostname;
-      } catch {
-        navLabel = navLabel || url.slice(0, 28);
+  let timedOut = false;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const waitPromise = payload.waitForLoad !== false ? waitForTabLoad(resolvedTab, 4500, url, oldUrl) : null;
+      await chrome.tabs.update(resolvedTab, { url });
+      if (waitPromise) {
+        const loadResult = await waitPromise;
+        timedOut = loadResult.timedOut;
       }
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === 2) break;
+      await new Promise((r) => setTimeout(r, 150));
     }
-    const shortNav = formatHumanLabel(navLabel, 28);
-    await dispatchShadowCursor(
-      resolvedTab,
-      'navigate',
-      0,
-      0,
-      `NAVIGATE · ${shortNav}`,
-      undefined,
-      `NAVIGATE · ${shortNav}`
-    );
+  }
+  if (lastErr) throw lastErr;
+
+  const tabInfo = await chrome.tabs.get(resolvedTab).catch(() => null);
+  let readyStateComplete = false;
+  if (tabInfo?.url && /^https?:/i.test(tabInfo.url)) {
+    await chrome.scripting.executeScript({ target: { tabId: resolvedTab }, files: ['content.js'] }).catch(() => {});
+    const rsRes = await chrome.scripting
+      .executeScript({ target: { tabId: resolvedTab }, func: () => document.readyState === 'complete' })
+      .catch(() => null);
+    readyStateComplete = Boolean(rsRes?.[0]?.result);
+    // Auto-wait for a stable results selector on search/product pages
+    if (/[?&](q|k|query|search)=|\/search\b|\/dp\/|\/p\//i.test(url)) {
+      await chrome.scripting
+        .executeScript({
+          target: { tabId: resolvedTab },
+          func: () =>
+            new Promise<void>((resolve) => {
+              const start = performance.now();
+              const sel = 'main, [role="main"], [data-component-type="s-search-result"], #search, .search-results, article, table, input[type="search"], #twotabsearchtextbox';
+              const poll = () => {
+                if (document.querySelector(sel) || performance.now() - start >= 1200) {
+                  resolve();
+                  return;
+                }
+                setTimeout(poll, 60);
+              };
+              poll();
+            }),
+        })
+        .catch(() => {});
+    }
   }
 
-  return { ok: true, action: 'navigate', target: url, verified: true, ms: Date.now() - navStart };
+  let navLabel = tabInfo?.title?.trim() || '';
+  if (!navLabel || navLabel.length > 28) {
+    try {
+      const u = new URL(url);
+      const segs = u.pathname.split('/').filter(Boolean);
+      const lastSeg = segs[segs.length - 1] || '';
+      navLabel = lastSeg ? `${u.hostname}/${lastSeg}` : u.hostname;
+    } catch {
+      navLabel = navLabel || url.slice(0, 28);
+    }
+  }
+  const shortNav = formatHumanLabel(navLabel, 28);
+  await dispatchShadowCursor(
+    resolvedTab,
+    'navigate',
+    0,
+    0,
+    `NAVIGATE · ${shortNav}`,
+    undefined,
+    `NAVIGATE · ${shortNav}`
+  );
+
+  let urlMatches = false;
+  try {
+    const reqU = new URL(url);
+    const curU = new URL(tabInfo?.url || '');
+    urlMatches = reqU.origin === curU.origin && reqU.pathname === curU.pathname;
+  } catch {
+    urlMatches = tabInfo?.url === url;
+  }
+  const verified = !timedOut && urlMatches && readyStateComplete;
+
+  return {
+    ok: true,
+    action: 'navigate',
+    target: url,
+    tabId: resolvedTab,
+    title: tabInfo?.title || '',
+    currentUrl: tabInfo?.url || '',
+    readyStateComplete,
+    timedOut,
+    verified,
+    ms: Date.now() - navStart,
+  };
 }
 
-async function waitForTabLoad(tabId?: number): Promise<void> {
-  await new Promise<void>((resolve) => {
+async function waitForTabLoad(tabId?: number, maxWaitMs = 4500, targetUrl?: string, _oldUrl?: string): Promise<{ timedOut: boolean }> {
+  const loadTimedOut = await new Promise<boolean>((resolve) => {
     let settled = false;
-    const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
-      if ((!tabId || id === tabId) && info.status === 'complete' && !settled) {
-        settled = true;
-        clearTimeout(timer);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
+    let sawLoading = false;
+    let targetHost = '';
+    try {
+      if (targetUrl) targetHost = new URL(targetUrl).origin;
+    } catch {}
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      clearInterval(poller);
+      chrome.tabs.onUpdated.removeListener(listener);
+    };
+
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (tabId && id !== tabId) return;
+      if (info.status === 'loading') {
+        sawLoading = true;
+      }
+      if (info.status === 'complete' && !settled && sawLoading) {
+        const curUrl = tab?.url || '';
+        const hostOk = !targetHost || curUrl.startsWith(targetHost);
+        if (hostOk) {
+          settled = true;
+          cleanup();
+          resolve(false);
+        }
       }
     };
+
+    const poller = setInterval(async () => {
+      if (settled || !tabId) return;
+      const t = await chrome.tabs.get(tabId).catch(() => null);
+      if (t?.status === 'loading') sawLoading = true;
+      if (t?.status === 'complete' && sawLoading) {
+        const curUrl = t.url || '';
+        if (!targetHost || curUrl.startsWith(targetHost)) {
+          const rs = await chrome.scripting
+            .executeScript({ target: { tabId }, func: () => document.readyState })
+            .catch(() => null);
+          if (rs?.[0]?.result === 'complete') {
+            settled = true;
+            cleanup();
+            resolve(false);
+          }
+        }
+      }
+    }, 80);
+
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
+        cleanup();
+        resolve(true);
       }
-    }, 15000);
+    }, maxWaitMs);
+
     chrome.tabs.onUpdated.addListener(listener);
   });
 
-  if (!tabId) return;
-  // Wait briefly for DOM stability (250ms quiet window, bounded at 2.5s)
+  if (!tabId) return { timedOut: loadTimedOut };
+  // Brief DOM stability check (150ms quiet window, bounded at 600ms)
   await chrome.scripting
     .executeScript({
       target: { tabId },
@@ -698,25 +964,42 @@ async function waitForTabLoad(tabId?: number): Promise<void> {
           const check = () => {
             const now = performance.now();
             if (
-              (document.readyState === 'complete' && now - lastMutation >= 250) ||
-              now - start >= 2500
+              (document.readyState === 'complete' && now - lastMutation >= 150) ||
+              now - start >= 600
             ) {
               observer.disconnect();
               resolve();
               return;
             }
-            setTimeout(check, 60);
+            setTimeout(check, 40);
           };
-          setTimeout(check, 80);
+          setTimeout(check, 40);
         }),
     })
     .catch(() => {});
+
+  return { timedOut: loadTimedOut };
 }
 
 async function newTab(payload: Record<string, unknown>): Promise<unknown> {
-  const tab = await chrome.tabs.create({ url: (payload.url as string) || 'about:blank' });
-  if (tab.id) tabOwnership.set(tab.id, 'mine');
-  return { id: tab.id, url: tab.url, title: tab.title, ownership: 'mine' };
+  const targetUrl = (payload.url as string) || 'about:blank';
+  const tab = await chrome.tabs.create({ url: targetUrl });
+  if (tab.id) {
+    tabOwnership.set(tab.id, 'mine');
+    if (/^https?:\/\//i.test(targetUrl)) {
+      await waitForTabLoad(tab.id, 6000, targetUrl);
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }).catch(() => {});
+    }
+  }
+  const latest = tab.id ? await chrome.tabs.get(tab.id).catch(() => tab) : tab;
+  return {
+    ok: true,
+    id: tab.id,
+    tabId: tab.id,
+    url: latest?.url || tab.url,
+    title: latest?.title || tab.title,
+    ownership: 'mine',
+  };
 }
 
 async function closeTab(payload: Record<string, unknown>): Promise<unknown> {
@@ -867,6 +1150,26 @@ async function takeScreenshot(payload: Record<string, unknown>): Promise<unknown
         }
       }
     }
+
+    // Fallback to CDP Page.captureScreenshot (works even when the browser window is minimized)
+    try {
+      const targetTabId =
+        (payload.tabId as number | undefined) ||
+        (await resolveDefaultTabId()) ||
+        (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+      if (targetTabId) {
+        const cdpShot = await cdpSession.sendCommand<{ data?: string }>(targetTabId, 'Page.captureScreenshot', {
+          format: format === 'jpeg' ? 'jpeg' : 'png',
+          ...(format === 'jpeg' ? { quality } : {}),
+        });
+        if (cdpShot?.data) {
+          return { base64: cdpShot.data, format, size: cdpShot.data.length };
+        }
+      }
+    } catch {
+      // fall through to original error
+    }
+
     throw new Error(`Screenshot capture failed: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
   } finally {
     releaseMutex();
@@ -1036,7 +1339,9 @@ interface ActionResult {
   rect?: { x: number; y: number; w: number; h: number };
   verified: boolean;
   ms: number;
+  timings?: { locateMs: number; cursorMs: number; executeMs: number; verifyMs: number };
   error?: string;
+  [key: string]: unknown;
 }
 
 function formatHumanLabel(raw: string, maxLen = 28): string {
@@ -1087,19 +1392,16 @@ async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick 
   const hasPerm = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
   if (!hasPerm) return false;
 
-  let attached = false;
   let timerId: ReturnType<typeof setTimeout> | null = null;
   const runCdp = (async () => {
-    await chrome.debugger.attach({ tabId }, '1.3');
-    attached = true;
-    await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+    await cdpSession.sendCommand(tabId, 'Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x,
       y,
     });
     const clicks = doubleClick ? [1, 2] : [1];
     for (const clickCount of clicks) {
-      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      await cdpSession.sendCommand(tabId, 'Input.dispatchMouseEvent', {
         type: 'mousePressed',
         x,
         y,
@@ -1107,7 +1409,7 @@ async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick 
         clickCount,
       });
       await new Promise((r) => setTimeout(r, 40));
-      await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      await cdpSession.sendCommand(tabId, 'Input.dispatchMouseEvent', {
         type: 'mouseReleased',
         x,
         y,
@@ -1116,16 +1418,11 @@ async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick 
       });
     }
     return true;
-  })().finally(() => {
-    if (attached) {
-      attached = false;
-      void chrome.debugger.detach({ tabId }).catch(() => {});
-    }
-  });
+  })();
 
   try {
     const cdpTimeout = new Promise<boolean>((resolve) => {
-      timerId = setTimeout(() => resolve(false), 2500);
+      timerId = setTimeout(() => resolve(false), 800);
     });
     return await Promise.race([runCdp, cdpTimeout]);
   } catch {
@@ -1223,68 +1520,46 @@ async function hoverElement(payload: Record<string, unknown>): Promise<ActionRes
   const hud = `HOVER · ${human}`;
   await dispatchShadowCursor(target, 'hover', coords.x, coords.y, hud, coords.rect, hud);
 
-  let attached = false;
   let verified = false;
   try {
-    try {
-      await chrome.debugger.attach({ tabId: target }, '1.3');
-      attached = true;
-      console.debug('cdp attach/detach', target, 'attached');
-    } catch (attachErr) {
-      attached = false;
-      console.debug(
-        'cdp attach/detach',
-        target,
-        'attach-skipped',
-        attachErr instanceof Error ? attachErr.message : String(attachErr)
-      );
-    }
-
-    if (attached) {
-      await chrome.debugger.sendCommand({ tabId: target }, 'Input.dispatchMouseEvent', {
-        type: 'mouseMoved',
-        x: coords.x,
-        y: coords.y,
-        button: 'none',
-      });
-    } else {
-      await chrome.scripting
-        .executeScript({
-          target: { tabId: target },
-          func: (px: number, py: number) => {
-            const el =
-              (document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null) ||
-              (document.elementFromPoint(px, py) as HTMLElement | null);
-            if (!el) return;
-            for (const evt of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
-              const Ctor = evt.startsWith('pointer') ? PointerEvent : MouseEvent;
-              el.dispatchEvent(new Ctor(evt, { bubbles: evt !== 'mouseenter' && evt !== 'pointerenter', clientX: px, clientY: py }));
-            }
-          },
-          args: [coords.x, coords.y],
-        })
-        .catch(() => {});
-    }
-
-    await new Promise((r) => setTimeout(r, 120));
-
-    const hoverVerify = await chrome.scripting.executeScript({
-      target: { tabId: target },
-      func: () => {
-        const el = document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null;
-        if (!el) return false;
-        el.removeAttribute('data-drishti-pending-hover');
-        return el.matches(':hover') || Boolean(document.querySelector(':hover'));
-      },
+    await cdpSession.sendCommand(target, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: coords.x,
+      y: coords.y,
+      button: 'none',
     });
-
-    verified = Boolean(hoverVerify[0]?.result);
-  } finally {
-    if (attached) {
-      await chrome.debugger.detach({ tabId: target }).catch(() => {});
-      console.debug('cdp attach/detach', target, 'detached');
-    }
+  } catch {
+    await chrome.scripting
+      .executeScript({
+        target: { tabId: target },
+        func: (px: number, py: number) => {
+          const el =
+            (document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null) ||
+            (document.elementFromPoint(px, py) as HTMLElement | null);
+          if (!el) return;
+          for (const evt of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'mousemove']) {
+            const Ctor = evt.startsWith('pointer') ? PointerEvent : MouseEvent;
+            el.dispatchEvent(new Ctor(evt, { bubbles: evt !== 'mouseenter' && evt !== 'pointerenter', clientX: px, clientY: py }));
+          }
+        },
+        args: [coords.x, coords.y],
+      })
+      .catch(() => {});
   }
+
+  await new Promise((r) => setTimeout(r, 120));
+
+  const hoverVerify = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: () => {
+      const el = document.querySelector('[data-drishti-pending-hover="1"]') as HTMLElement | null;
+      if (!el) return false;
+      el.removeAttribute('data-drishti-pending-hover');
+      return el.matches(':hover') || Boolean(document.querySelector(':hover'));
+    },
+  });
+
+  verified = Boolean(hoverVerify[0]?.result);
   if (!verified) {
     return {
       ok: false,
@@ -1390,17 +1665,26 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
       async function waitScrollSettle(element: HTMLElement) {
         const r0 = element.getBoundingClientRect();
         if (r0.top >= 24 && r0.bottom <= window.innerHeight - 24) return;
-        element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
         await new Promise<void>((resolve) => {
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(fallback);
+            resolve();
+          };
+          const fallback = setTimeout(done, 150);
           let lastTop = r0.top;
           let stable = 0;
           const started = performance.now();
           const tick = () => {
+            if (settled) return;
             const r = element.getBoundingClientRect();
             if (Math.abs(r.top - lastTop) < 0.75) stable++;
             else stable = 0;
             lastTop = r.top;
-            if (stable >= 3 || performance.now() - started > 450) resolve();
+            if (stable >= 2 || performance.now() - started > 150) done();
             else requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -1417,6 +1701,20 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
           el = document.querySelector(selector) as HTMLElement | null;
         } catch {
           el = null;
+        }
+        if (!el && selector.includes(',')) {
+          for (const part of selector.split(',').map((s) => s.trim()).filter(Boolean)) {
+            if (/:has-text\(/i.test(part)) continue;
+            try {
+              const found = document.querySelector(part) as HTMLElement | null;
+              if (found) {
+                el = found;
+                break;
+              }
+            } catch {
+              // ignore invalid CSS sub-selector
+            }
+          }
         }
         if (!el && learnedSelector) {
           try {
@@ -1466,6 +1764,9 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
       await waitScrollSettle(el);
       const rect = el.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) {
+        throw new Error(`Element matched "${selector || 'target'}" is not visible (0x0)`);
+      }
 
       // G3: Resolve human label (never fall back to CSS selector)
       const resolveLabel = (node: HTMLElement): string => {
@@ -1580,6 +1881,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
   }
 
   const clickStartedAt = Date.now();
+  const locateMs = 0;
   const isDoubleClick = Boolean(payload.doubleClick);
   const prep = locateRes[0]?.result as {
     x: number;
@@ -1598,10 +1900,11 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
 
   const humanTarget = formatHumanLabel(prep.matchedText || 'button', 28);
   const clickHud = isDoubleClick ? `DBLCLICK · ${humanTarget}` : /copy/i.test(humanTarget) ? `COPY · ${humanTarget}` : `CLICK · ${humanTarget}`;
+  const cursorT0 = Date.now();
   await dispatchShadowCursor(target, 'click', prep.x, prep.y, clickHud, prep.visualRect, clickHud, {
     realRect: prep.rect,
   });
-  await new Promise((r) => setTimeout(r, 60));
+  const cursorMs = Date.now() - cursorT0;
 
   const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
   const cdpOk = await trustedCdpClick(target, prep.x, prep.y, isDoubleClick);
@@ -1645,6 +1948,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
   }
   const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
   const verified = Boolean(clickRes[0]?.result?.verified) || postUrl !== preUrl;
+  const totalMs = Date.now() - clickStartedAt;
 
   return {
     ok: true,
@@ -1657,7 +1961,8 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
       h: Math.round(prep.rect.height),
     },
     verified,
-    ms: Date.now() - clickStartedAt,
+    timings: { locateMs, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
+    ms: totalMs,
   };
 }
 
@@ -1954,6 +2259,7 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     verified: Boolean(typeRes?.verified),
     animated: Boolean(typeRes?.animated ?? !instantType),
     chars: typeRes?.chars ?? textToType.length,
+    timings: { locateMs: 0, cursorMs: 0, executeMs: durationMs, verifyMs: 0 },
     durationMs,
     ms: durationMs,
   };
@@ -1984,29 +2290,76 @@ async function scrollPage(payload: Record<string, unknown>): Promise<ActionResul
         left: [-amt, 0],
       };
       const [x, y] = scrollMap[dir] || [0, amt];
-      window.scrollBy({ left: x, top: y, behavior: 'smooth' });
-      await new Promise((r) => setTimeout(r, 320));
+      window.scrollBy({ left: x, top: y, behavior: 'auto' });
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(fallback);
+          resolve();
+        };
+        const fallback = setTimeout(done, 120);
+        let lastY = window.scrollY;
+        let stable = 0;
+        let frames = 0;
+        const step = () => {
+          if (settled) return;
+          frames++;
+          if (Math.abs(window.scrollY - lastY) < 0.5) stable++;
+          else stable = 0;
+          lastY = window.scrollY;
+          if (stable >= 2 || frames >= 10) done();
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      const newX = window.scrollX;
+      const newY = window.scrollY;
       const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      const scrollPct = Math.round((window.scrollY / maxScroll) * 100);
-      const verified = window.scrollY !== prevY || window.scrollX !== prevX || maxScroll <= 1;
-      return { scrollPct, verified };
+      const scrollPct = Math.round((newY / maxScroll) * 100);
+      const verified = Math.abs(newY - prevY) > 0 || Math.abs(newX - prevX) > 0 || maxScroll <= 1;
+      return { prevY, newY, scrollPct, verified };
     },
     args: [direction, amount],
   });
 
   const scrollRes = results[0]?.result;
   const pct = scrollRes?.scrollPct ?? 0;
+  const cursorT0 = Date.now();
   await dispatchShadowCursor(target, 'scroll', 0, 0, `SCROLL ${pct}%`, undefined, `SCROLL ${pct}%`, {
     scrollPct: pct,
   });
+  const cursorMs = Date.now() - cursorT0;
+  const totalMs = Date.now() - startedAt;
 
   return {
     ok: true,
     action: 'scroll',
     target: `${direction} ${amount}px`,
+    scrollY: scrollRes?.newY ?? 0,
     verified: Boolean(scrollRes?.verified),
-    ms: Date.now() - startedAt,
+    timings: { locateMs: 0, cursorMs, executeMs: Math.max(0, totalMs - cursorMs), verifyMs: 0 },
+    ms: totalMs,
+    details: {
+      prevY: scrollRes?.prevY ?? 0,
+      newY: scrollRes?.newY ?? 0,
+      scrollPct: pct,
+    },
   };
+}
+
+async function printPdf(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const paper = String(payload.format || 'A4').toUpperCase();
+  const res = (await cdpSession.sendCommand<{ data?: string }>(target, 'Page.printToPDF', {
+    printBackground: payload.printBackground !== false,
+    landscape: Boolean(payload.landscape),
+    paperWidth: paper === 'LETTER' ? 8.5 : 8.27,
+    paperHeight: paper === 'LETTER' ? 11 : 11.69,
+  })) as { data?: string };
+  if (!res?.data) throw new Error('Page.printToPDF returned empty data');
+  return { base64: res.data, format: paper, size: res.data.length };
 }
 
 async function pressKey(payload: Record<string, unknown>): Promise<ActionResult> {
@@ -2610,9 +2963,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_STATUS') {
     sendResponse({
       connected: isConnected,
-      hasToken: Boolean(authToken),
+      bridgeEnabled,
+      hasToken: Boolean(authToken) || activeTransport === 'native',
+      transport: activeTransport || 'auto',
       port: 7483,
     });
+    return true;
+  }
+  if (msg.type === 'SET_BRIDGE_ENABLED') {
+    const next = Boolean(msg.enabled);
+    bridgeEnabled = next;
+    chrome.storage.local
+      .set({ bridgeEnabled: next })
+      .then(async () => {
+        if (next) await connectToBridge(true);
+        else await disconnectBridge();
+        sendResponse({ ok: true, connected: isConnected, bridgeEnabled });
+      })
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
   if (msg.type === 'RECONNECT') {
@@ -2847,35 +3215,26 @@ async function evaluateInPage(payload: Record<string, unknown>): Promise<unknown
     return typeof __fn === 'function' ? __fn(__arg) : __fn;
   })()`;
 
-  let attached = false;
-  try {
-    await chrome.debugger.attach({ tabId: target }, '1.3');
-    attached = true;
-    const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
-    const cdpRes = (await chrome.debugger.sendCommand({ tabId: target }, 'Runtime.evaluate', {
-      expression: expr,
-      returnByValue: true,
-      awaitPromise: true,
-      timeout: timeoutMs,
-    })) as { result?: { value?: unknown; description?: string }; exceptionDetails?: { text?: string; exception?: { description?: string } } };
+  const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+  const cdpRes = (await cdpSession.sendCommand(target, 'Runtime.evaluate', {
+    expression: expr,
+    returnByValue: true,
+    awaitPromise: true,
+    timeout: timeoutMs,
+  })) as { result?: { value?: unknown; description?: string }; exceptionDetails?: { text?: string; exception?: { description?: string } } };
 
-    if (cdpRes?.exceptionDetails) {
-      const errText =
-        cdpRes.exceptionDetails.exception?.description ||
-        cdpRes.exceptionDetails.text ||
-        'Evaluation threw an exception';
-      throw new Error(errText);
-    }
-    const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
-    return {
-      changed: postUrl !== preUrl,
-      value: cdpRes?.result?.value ?? null,
-    };
-  } finally {
-    if (attached) {
-      await chrome.debugger.detach({ tabId: target }).catch(() => {});
-    }
+  if (cdpRes?.exceptionDetails) {
+    const errText =
+      cdpRes.exceptionDetails.exception?.description ||
+      cdpRes.exceptionDetails.text ||
+      'Evaluation threw an exception';
+    throw new Error(errText);
   }
+  const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+  return {
+    changed: postUrl !== preUrl,
+    value: cdpRes?.result?.value ?? null,
+  };
 }
 
 async function readPage(payload: Record<string, unknown>): Promise<unknown> {
@@ -3186,9 +3545,13 @@ async function scrollIntoView(payload: Record<string, unknown>): Promise<unknown
     func: (selector: string) => {
       const el = document.querySelector(selector) as HTMLElement | null;
       if (!el) throw new Error(`Element not found: ${selector}`);
-      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
       const r = el.getBoundingClientRect();
-      return { scrolledIntoView: selector, bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } };
+      return {
+        scrolledIntoView: selector,
+        scrollY: Math.round(window.scrollY),
+        bounds: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
+      };
     },
     args: [sel],
   });
@@ -3199,24 +3562,29 @@ async function waitForCondition(payload: Record<string, unknown>): Promise<unkno
   const target = await resolveTargetTab(payload);
   const selector = (payload.selector as string) || null;
   const text = (payload.text as string) || null;
-  const timeout = Math.min(Number(payload.timeout ?? 15000), 60000);
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: target },
-    func: async (sel: string | null, txt: string | null, maxMs: number) => {
-      const start = Date.now();
-      while (Date.now() - start < maxMs) {
-        const selMatched = !sel || Boolean(document.querySelector(sel));
-        const txtMatched = !txt || (document.body?.innerText || '').includes(txt);
-        if (selMatched && txtMatched) {
-          return { matched: true, waitedMs: Date.now() - start, selector: sel, text: txt };
-        }
-        await new Promise((r) => setTimeout(r, 200));
+  const timeout = Math.min(Math.max(200, Number(payload.timeoutMs ?? payload.timeout ?? 15000)), 25000);
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: target },
+        func: (sel: string | null, txt: string | null) => {
+          const selMatched = !sel || Boolean(document.querySelector(sel));
+          const txtMatched = !txt || (document.body?.innerText || '').includes(txt);
+          return selMatched && txtMatched;
+        },
+        args: [selector, text],
+      });
+      if (results[0]?.result === true) {
+        return { matched: true, waitedMs: Date.now() - start, selector, text };
       }
-      throw new Error(`wait_for timed out after ${maxMs}ms (selector=${sel}, text=${txt})`);
-    },
-    args: [selector, text, timeout],
-  });
-  return results[0]?.result;
+    } catch {
+      // Transient frame/navigation error while tab reloads; keep polling until timeout
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`wait_for timed out after ${timeout}ms (selector=${selector}, text=${text})`);
 }
 
 async function dragAndDrop(payload: Record<string, unknown>): Promise<ActionResult> {

@@ -19,8 +19,12 @@ function formatLevel(level: string, color: string): string {
   return `${color}[${level.toUpperCase().padEnd(5)}]${RESET}`;
 }
 
+const USE_STDERR = process.env.DRISHTI_NATIVE_HOST === '1' || process.argv.includes('--native-host');
+
 function info(message: string, ...args: unknown[]): void {
-  console.log(`${timestamp()} ${formatLevel('info', GREEN)} ${CYAN}${message}${RESET}`, ...args);
+  const line = `${timestamp()} ${formatLevel('info', GREEN)} ${CYAN}${message}${RESET}`;
+  if (USE_STDERR) console.error(line, ...args);
+  else console.log(line, ...args);
 }
 
 function warn(message: string, ...args: unknown[]): void {
@@ -33,7 +37,9 @@ function error(message: string, ...args: unknown[]): void {
 
 function debug(message: string, ...args: unknown[]): void {
   if (process.env.DEBUG || process.env.LOG_LEVEL === 'debug') {
-    console.debug(`${timestamp()} ${formatLevel('debug', MAGENTA)} ${DIM}${message}${RESET}`, ...args);
+    const line = `${timestamp()} ${formatLevel('debug', MAGENTA)} ${DIM}${message}${RESET}`;
+    if (USE_STDERR) console.error(line, ...args);
+    else console.debug(line, ...args);
   }
 }
 

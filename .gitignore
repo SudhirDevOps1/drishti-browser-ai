@@ -18,8 +18,11 @@ apps/web-showcase/src/generated/
 # Local Scratch, Downloads, SQLite Memory & Logs
 scratch/
 downloads/
+drishti-audit.jsonl
+**/drishti-audit.jsonl
 apps/mcp-server/data/
 apps/mcp-server/workflows/
+apps/local-bridge/native-host/
 *.db
 *.db-wal
 *.db-shm

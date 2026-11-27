@@ -83,9 +83,9 @@ node scripts/version.mjs bump patch
 
 ## 4. Active Environment Constants
 
-- **WebSocket Bridge URL:** `ws://127.0.0.1:7483`
-- **Active Auth Token:** `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-- **Total Registered Tools:** 62 MCP Tools
+- **Primary Transport:** Native Messaging (`com.drishti.bridge`) + Named Pipe (`\\.\pipe\drishti-bridge`)
+- **Fallback WebSocket URL:** `ws://127.0.0.1:7483` (uses `.drishti-token` when WS fallback is active)
+- **Total Registered Tools:** 63 MCP Tools
 
 ---
 

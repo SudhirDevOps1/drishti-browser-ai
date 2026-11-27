@@ -26,6 +26,8 @@ export function PopupApp() {
   const [activeTab, setActiveTab] = useState<{ id?: number; title?: string; url?: string; favIconUrl?: string }>({});
   const [tabCount, setTabCount] = useState<number>(0);
   const [tokenConfigured, setTokenConfigured] = useState<boolean>(false);
+  const [bridgeEnabled, setBridgeEnabled] = useState<boolean>(true);
+  const [transport, setTransport] = useState<string>('auto');
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const [automationMode, setAutomationMode] = useState<string>('AUTO');
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
@@ -38,60 +40,49 @@ export function PopupApp() {
     chrome.runtime.sendMessage({ type: 'SET_AUTOMATION_ENABLED', enabled: next }).catch(() => {});
   };
 
+  const toggleBridgePower = () => {
+    const next = !(bridgeEnabled && connected);
+    setBridgeEnabled(next);
+    setIsReconnecting(true);
+    chrome.runtime.sendMessage({ type: 'SET_BRIDGE_ENABLED', enabled: next }, (res) => {
+      if (res) {
+        setConnected(Boolean(res.connected));
+        if (res.bridgeEnabled !== undefined) setBridgeEnabled(Boolean(res.bridgeEnabled));
+      } else if (!next) {
+        setConnected(false);
+      }
+      setIsReconnecting(false);
+    });
+  };
+
   const handleCopyAIPrompt = () => {
-    chrome.storage.local.get(['bridgeAuthToken', 'bridgeWsPort'], (res) => {
-      const token = res.bridgeAuthToken || '';
-      const port = res.bridgeWsPort || 7483;
-      const promptText = `<SYSTEM_INSTRUCTION>
+    const promptText = `<SYSTEM_INSTRUCTION>
 You are an expert AI Browser Automation Agent empowered to inspect, navigate, and control the user's live browser via the Drishti Browser AI Model Context Protocol (MCP) server.
 
 ## 1. PLATFORM TOPOLOGY
 - Local MCP Server: <path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js
-- WebSocket Bridge: ws://127.0.0.1:${port}
-- Bridge Auth Token: ${token}
-- Chrome Extension: Drishti Browser AI (v0.1.3 PRO)
-- Mode: Mode A (Daily Chrome profile with user's real sessions, cookies & logins)
+- Primary Transport: Native Messaging (com.drishti.bridge) + Named Pipe (\\\\.\\pipe\\drishti-bridge) — Zero-Token Auto-Start
+- Fallback Transport: WebSocket ws://127.0.0.1:7483
+- Extension: Drishti Browser AI (v0.1.3) for Chrome, Brave, Edge & Chromium (Persistent CDP)
 
 ## 2. MCP CONFIGURATION
-Add to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MCP Settings):
 {
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "${token || 'YOUR_AUTH_TOKEN'}",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:${port}"
-      }
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
     }
   }
 }
 
-## 0. FIRST-TIME TOKEN & SETUP (IF YOUR_AUTH_TOKEN)
-If BRIDGE_AUTH_TOKEN is "YOUR_AUTH_TOKEN":
-1. Generate a secure 64-character hex token via: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-2. Save it to .drishti-token in the repo root, configure MCP with that token, and start the bridge on-demand (never install OS auto-start scripts).
-3. Print the generated token and guide the user step-by-step:
-   - Open chrome://extensions/ -> Developer mode -> Load unpacked -> select apps/chrome-extension/dist
-   - Open Drishti Settings -> Connection & Bridge -> paste token -> Save Changes -> Run Ping.
-
-## 3. HOW TO EXECUTE USER TASKS
-When the user gives you any browser task:
-1. Call browser_status() to verify connection and active tab.
-2. Call browser_navigate({ url: "https://..." }) to open the target website.
-3. Call browser_observe() or browser_snapshot() to locate interactive buttons and input fields.
-4. Call browser_type({ selector: "...", text: "..." }) or browser_click({ selector: "..." }).
-5. Call browser_screenshot() to visually verify results.
-6. Call browser_get_text() or browser_get_tables() to extract data and present a comprehensive final report.
-
-## 4. SAFETY RULES
-- Never read or extract values from type="password" fields.
-- Always ask user confirmation before submitting financial checkouts or payments.
+## 3. TOKEN-EFFICIENT EXECUTION (63 MCP TOOLS)
+1. Call workflow_match({ query }) or browser_run({ steps, goal }) for multi-step flows.
+2. Use browser_observe(), browser_snapshot() (@eN refs), browser_read(), browser_grep(), and browser_evaluate() instead of redundant screenshots.
+3. Use browser_screenshot({ path }) and browser_print_pdf({ path }) to save artifacts; never read type="password" fields.
 </SYSTEM_INSTRUCTION>`;
-      navigator.clipboard.writeText(promptText);
-      setCopiedPromptToast(true);
-      setTimeout(() => setCopiedPromptToast(false), 2500);
-    });
+    navigator.clipboard.writeText(promptText);
+    setCopiedPromptToast(true);
+    setTimeout(() => setCopiedPromptToast(false), 2500);
   };
 
   useEffect(() => {
@@ -107,7 +98,9 @@ When the user gives you any browser task:
     chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
       if (res) {
         setConnected(!!res.connected);
+        if (res.bridgeEnabled !== undefined) setBridgeEnabled(!!res.bridgeEnabled);
         if (res.hasToken) setTokenConfigured(true);
+        if (res.transport) setTransport(String(res.transport));
       }
     });
 
@@ -248,21 +241,21 @@ When the user gives you any browser task:
         </div>
       </div>
 
-      {/* Warning Card if Token Missing */}
-      {!tokenConfigured && (
+      {/* Warning Card if Bridge Offline & Not Configured */}
+      {!connected && !tokenConfigured && (
         <div className="mb-3.5 p-3 rounded-xl bg-gradient-to-r from-amber-950/60 to-amber-900/40 border border-amber-500/40 text-amber-200 text-xs shadow-lg animate-in fade-in duration-300">
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <div className="font-semibold text-amber-300">Auth Token Required</div>
+              <div className="font-semibold text-amber-300">Bridge Not Connected</div>
               <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                Connect your AI agent securely by configuring the bridge auth token.
+                Run <code className="font-mono text-amber-100">pnpm native:install</code> once for zero-token auto-connect, or configure WebSocket fallback.
               </p>
               <button
                 onClick={handleOpenSettings}
                 className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-300 hover:text-white underline underline-offset-2 pt-0.5 transition"
               >
-                <span>Configure in Settings</span>
+                <span>Open Settings</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>
@@ -306,9 +299,11 @@ When the user gives you any browser task:
 
         <div className="p-2.5 rounded-xl bg-slate-900/50 border border-slate-800/80 text-center hover:border-slate-700 transition">
           <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider flex items-center justify-center gap-1 mb-0.5">
-            <Cpu className="w-2.5 h-2.5 text-indigo-400" /> Port
+            <Cpu className="w-2.5 h-2.5 text-indigo-400" /> Bridge
           </div>
-          <div className="text-base font-extrabold text-slate-200 tracking-tight font-mono">7483</div>
+          <div className="text-xs font-extrabold text-slate-200 tracking-tight font-mono mt-1">
+            {transport === 'native' ? 'NATIVE' : '7483'}
+          </div>
         </div>
 
         <div className="p-2.5 rounded-xl bg-slate-900/50 border border-slate-800/80 text-center hover:border-slate-700 transition">
@@ -350,19 +345,33 @@ When the user gives you any browser task:
           )}
         </button>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={toggleBridgePower}
+            disabled={isReconnecting}
+            className={`btn-tactile flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border font-semibold text-xs transition-all disabled:opacity-50 ${
+              connected && bridgeEnabled
+                ? 'bg-rose-950/60 hover:bg-rose-900/70 border-rose-500/40 text-rose-300'
+                : 'bg-emerald-950/60 hover:bg-emerald-900/70 border-emerald-500/40 text-emerald-300'
+            }`}
+            title={connected && bridgeEnabled ? 'Disconnect bridge & close Native Host' : 'Connect bridge'}
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>{connected && bridgeEnabled ? 'Turn OFF' : 'Turn ON'}</span>
+          </button>
+
           <button
             onClick={handleReconnect}
             disabled={isReconnecting}
-            className="btn-tactile flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs transition-all disabled:opacity-50"
+            className="btn-tactile flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs transition-all disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isReconnecting ? 'animate-spin' : ''}`} />
-            <span>{isReconnecting ? 'Syncing...' : 'Ping Bridge'}</span>
+            <span>{isReconnecting ? 'Sync...' : 'Ping'}</span>
           </button>
 
           <button
             onClick={handleOpenSettings}
-            className="btn-tactile flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs transition-all"
+            className="btn-tactile flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 font-semibold text-xs transition-all"
           >
             <Settings className="w-3.5 h-3.5 text-slate-400 group-hover:rotate-45 transition-transform" />
             <span>Settings</span>

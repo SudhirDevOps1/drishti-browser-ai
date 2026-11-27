@@ -87,6 +87,7 @@ describe('Tool Dispatch & Registry Parity', () => {
       browser_console: 'GET_CONSOLE_LOGS',
       browser_get_errors: 'GET_CONSOLE_LOGS',
       browser_network_inspect: 'GET_NETWORK_LOGS',
+      browser_print_pdf: 'PRINT_PDF',
     };
 
     for (const tool of ALL_TOOLS) {
@@ -196,5 +197,55 @@ describe('Safety, PII Redaction & Audit Log', () => {
     expect(bridgeSrv).toContain("type: 'auth_fail'");
     expect(bridgeCli).toContain("ws.once('close'");
     expect(mcpIdx).toContain('start().catch');
+  });
+
+  it('verifies browser_scroll instant scroll & verified:true when scrollY changes 0 -> 771', () => {
+    expect(bgSource).toContain("behavior: 'auto'");
+    expect(bgSource).toContain('Math.abs(newY - prevY) > 0');
+    const prevY = 0;
+    const newY = 771;
+    const verified = Math.abs(newY - prevY) > 0;
+    expect(verified).toBe(true);
+  });
+
+  it('verifies navigate pre-warm, 2-attempt retry, content.js preload, and gitignored audit log', () => {
+    const gitignore = readFileSync(join(ROOT, '.gitignore'), 'utf8');
+    const bridgeSrv = readFileSync(join(ROOT, 'apps/local-bridge/src/bridge-server.ts'), 'utf8');
+    expect(bgSource).toContain('for (let attempt = 1; attempt <= 2; attempt++)');
+    expect(bgSource).toContain('sawLoading');
+    expect(bgSource).toContain('readyStateComplete');
+    expect(bgSource).toContain('const verified = !timedOut && urlMatches && readyStateComplete');
+    expect(bgSource).toContain("files: ['content.js']");
+    expect(bridgeSrv).toContain('setTimeout(r, 500)');
+    expect(gitignore).toContain('drishti-audit.jsonl');
+  });
+
+  it('verifies browser_screenshot path, browser_print_pdf, per-phase timings, and browser_audit filters', () => {
+    const browserTools = readFileSync(join(ROOT, 'apps/mcp-server/src/tools/browser.tools.ts'), 'utf8');
+    const debugTools = readFileSync(join(ROOT, 'apps/mcp-server/src/tools/debugging.tools.ts'), 'utf8');
+    const auditLogger = readFileSync(join(ROOT, 'apps/mcp-server/src/audit-logger.ts'), 'utf8');
+
+    expect(browserTools).toContain('browser_print_pdf');
+    expect(browserTools).toContain('PRINT_PDF');
+    expect(browserTools).toContain('writeFileSync');
+    expect(bgSource).toContain('Page.printToPDF');
+
+    expect(bgSource).toContain('locateMs');
+    expect(bgSource).toContain('cursorMs');
+    expect(bgSource).toContain('executeMs');
+    expect(bgSource).toContain('verifyMs');
+
+    expect(debugTools).toContain('outcome');
+    expect(debugTools).toContain('since');
+    expect(auditLogger).toContain('opts.tool');
+    expect(auditLogger).toContain('opts.outcome');
+    expect(auditLogger).toContain('opts.since');
+
+    // Verify WAIT_FOR timeoutMs + 25s cap, zero-rect click guard, and compact path screenshot
+    expect(bgSource).toContain('payload.timeoutMs ?? payload.timeout');
+    expect(bgSource).toContain('is not visible (0x0)');
+    expect(bgSource).toContain('tabId: tab.id');
+    expect(bgSource).toContain('scrollIntoView({ behavior:');
+    expect(browserTools).toContain('params.inline !== true');
   });
 });

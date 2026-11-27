@@ -1,6 +1,11 @@
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
+
+function resolveDefaultPipePath(): string {
+  return process.env.BRIDGE_PIPE_PATH || (process.platform === 'win32' ? '\\\\.\\pipe\\drishti-bridge' : '/tmp/drishti-bridge.sock');
+}
 
 interface PendingCommand {
   resolve: (value: unknown) => void;
@@ -36,6 +41,8 @@ function resolveCommandTimeoutMs(): number {
 
 export class BridgeClient {
   private ws: WebSocket | null = null;
+  private pipeSocket: net.Socket | null = null;
+  private transportMode: 'pipe' | 'ws' | null = null;
   private pending = new Map<string, PendingCommand>();
   private connected = false;
   private destroyed = false;
@@ -50,7 +57,75 @@ export class BridgeClient {
   ) {}
 
   isConnected(): boolean {
-    return this.connected && this.ws?.readyState === WebSocket.OPEN;
+    if (!this.connected) return false;
+    if (this.transportMode === 'pipe') {
+      return Boolean(this.pipeSocket && !this.pipeSocket.destroyed && this.pipeSocket.writable);
+    }
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  private shouldTryPipeFirst(): boolean {
+    if (process.env.BRIDGE_TRANSPORT === 'ws') return false;
+    if (process.env.BRIDGE_PIPE_PATH) return true;
+    return this.url === 'ws://127.0.0.1:7483' || this.url === 'ws://localhost:7483';
+  }
+
+  private tryConnectPipe(timeoutMs = 200): Promise<boolean> {
+    const pipePath = resolveDefaultPipePath();
+    return new Promise((resolve) => {
+      let settled = false;
+      const sock = net.connect(pipePath);
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { sock.destroy(); } catch {}
+          resolve(false);
+        }
+      }, timeoutMs);
+
+      sock.once('connect', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.pipeSocket = sock;
+        this.transportMode = 'pipe';
+        this.connected = true;
+        this.reconnectAttempts = 0;
+
+        let buf = '';
+        sock.on('data', (chunk) => {
+          buf += chunk.toString('utf8');
+          let nl: number;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (line) this.handleRawJson(line);
+          }
+        });
+
+        const onDown = () => {
+          if (this.pipeSocket === sock) {
+            this.pipeSocket = null;
+            this.transportMode = null;
+            this.handleClose();
+          }
+        };
+        sock.once('close', onDown);
+        sock.on('error', () => {
+          // handled by close
+        });
+        resolve(true);
+      });
+
+      sock.once('error', () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          try { sock.destroy(); } catch {}
+          resolve(false);
+        }
+      });
+    });
   }
 
   onCommand(hook: CommandHook): () => void {
@@ -86,7 +161,7 @@ export class BridgeClient {
       this.reconnectTimer = null;
     }
 
-    this.connectPromise = new Promise<void>((resolve) => {
+    this.connectPromise = new Promise<void>(async (resolve) => {
       let settled = false;
       const finish = () => {
         if (!settled) {
@@ -96,8 +171,17 @@ export class BridgeClient {
         }
       };
 
+      if (this.shouldTryPipeFirst()) {
+        const pipeOk = await this.tryConnectPipe(200);
+        if (pipeOk) {
+          finish();
+          return;
+        }
+      }
+
       const ws = new WebSocket(this.url);
       this.ws = ws;
+      this.transportMode = 'ws';
 
       const onOpen = () => {
         const authMsg = JSON.stringify({ type: 'auth', token: this.authToken, client: 'mcp' });
@@ -211,10 +295,16 @@ export class BridgeClient {
       this.pending.delete(id);
     }
 
+    if (this.pipeSocket) {
+      try { this.pipeSocket.destroy(); } catch {}
+      this.pipeSocket = null;
+    }
+
     if (this.ws) {
       try { this.ws.close(); } catch {}
       this.ws = null;
     }
+    this.transportMode = null;
   }
 
   private autoStartAttempted = false;
@@ -252,7 +342,7 @@ export class BridgeClient {
       }
     }
 
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.isConnected()) {
       const err = new Error(
         `BridgeClient: not connected to bridge at ${this.url}. Run: pnpm bridge:start (port 7483, ws://127.0.0.1:7483). If already running, verify BRIDGE_AUTH_TOKEN matches .drishti-token.`
       );
@@ -270,7 +360,7 @@ export class BridgeClient {
       // If socket dropped mid-flight, attempt 1 reconnect + retry
       if (!this.destroyed && msg.includes('WebSocket closed')) {
         await this.connect();
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.isConnected()) {
           const retryResult = await this.dispatchOnce(action, payload);
           this.emitHook({ action, payload, result: retryResult, durationMs: Date.now() - start });
           return retryResult;
@@ -284,7 +374,7 @@ export class BridgeClient {
   private dispatchOnce(action: string, payload: unknown): Promise<unknown> {
     const timeoutMs = resolveCommandTimeoutMs();
     return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.isConnected()) {
         reject(new Error(`BridgeClient: not connected to bridge at ${this.url}`));
         return;
       }
@@ -305,7 +395,11 @@ export class BridgeClient {
       this.pending.set(id, { resolve, reject, timer });
 
       try {
-        this.ws.send(message);
+        if (this.transportMode === 'pipe' && this.pipeSocket) {
+          this.pipeSocket.write(message + '\n');
+        } else if (this.ws) {
+          this.ws.send(message);
+        }
       } catch (err) {
         clearTimeout(timer);
         this.pending.delete(id);
@@ -315,9 +409,13 @@ export class BridgeClient {
   }
 
   private handleMessage(data: WebSocket.RawData): void {
+    this.handleRawJson(data.toString());
+  }
+
+  private handleRawJson(raw: string): void {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(data.toString());
+      parsed = JSON.parse(raw);
     } catch {
       return;
     }

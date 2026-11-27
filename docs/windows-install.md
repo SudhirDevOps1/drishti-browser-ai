@@ -7,11 +7,11 @@ Complete, step-by-step setup guide for running **Drishti Browser AI** on Windows
 ## 1. System Requirements
 
 - **Operating System:** Windows 10 or Windows 11 (64-bit)
-- **Browser:** Google Chrome (v115+) or Brave Browser (supports Manifest V3)
+- **Browser:** Google Chrome, Brave, Microsoft Edge, or Chromium (Manifest V3)
 - **Node.js:** v20.x, v22.x, or v26.x LTS ([Download from nodejs.org](https://nodejs.org))
 - **Package Manager:** `pnpm` (v9 or v10+)
-- **Active Auth Token:** `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-- **Default Port:** `7483` (WebSocket)
+- **Primary Transport:** OS Native Messaging (`com.drishti.bridge`) + Named Pipe (`\\.\pipe\drishti-bridge`) — Zero Token
+- **Fallback Transport:** Localhost WebSocket (`ws://127.0.0.1:7483`, optional)
 
 Verify your environment:
 ```powershell
@@ -31,14 +31,17 @@ cd "<path-to-drishti-browser-ai>"
 # Install all workspace dependencies
 pnpm install
 
-# Compile all 10 packages & Vite extensions
-pnpm build
+# Compile all 11 workspace packages & Vite extensions
+pnpm -r run build
 
-# Run unit tests (24 passed)
+# Run unit tests (46 passed)
 pnpm test
+
+# Register Native Messaging for Chrome, Brave, Edge & Chromium
+pnpm native:install
 ```
 
-For automatic multi-client MCP + `.drishti-token` + skill setup, run:
+For automatic multi-client MCP + skill setup, run:
 ```powershell
 pnpm setup:agent -- --client auto
 ```
@@ -67,39 +70,28 @@ Select either of the compiled output folders:
    - For **Brave**: `brave://extensions/`
 2. In the top-right corner, turn **Developer mode** toggle **ON**.
 3. Click **Load unpacked** in the top-left toolbar.
-4. Select `<path-to-drishti-browser-ai>/apps/chrome-extension/dist` (or `apps\chrome-extension\dist`).
-5. The extension card **"Drishti Browser AI"** (`v0.1.2`) will appear.
+4. Select `<path-to-drishti-browser-ai>\extension-ready-to-install` (or `apps\chrome-extension\dist`).
+5. The extension card **"Drishti Browser AI"** (`v0.1.3`) will appear.
 6. Pin the extension to your toolbar.
 
 > [!NOTE]
-> In Chrome/Brave, you may notice `Inspect views: service worker (Inactive)`. This is normal Chromium Manifest V3 behavior! Chromium automatically puts background workers to sleep when idle to save CPU/RAM. As soon as a WebSocket message or button click occurs, it wakes up within 2ms.
+> In Chrome/Brave/Edge, `Inspect views: service worker (Inactive)` is normal Chromium MV3 behavior. When an MCP command arrives over Native Messaging, Chromium wakes the worker automatically.
 
 ---
 
-## 4. Start Local Bridge Daemon
+## 4. Zero-Token Native Connection (Default)
 
-In PowerShell:
+Once `pnpm native:install` has been run, **no manual `pnpm bridge:start` or token copy-paste is required**:
+1. Open the extension icon → **Options** → **Connection & Bridge**.
+2. Click **Test Bridge Ping** to verify green `ONLINE` status over Native Pipe (`\\.\pipe\drishti-bridge`).
+
+### Optional Fallback: Manual WebSocket Bridge (`ws://127.0.0.1:7483`)
+Only needed if you intentionally skip `pnpm native:install`:
 ```powershell
-$env:BRIDGE_AUTH_TOKEN = "YOUR_64_CHARACTER_BRIDGE_TOKEN"
-cd "<path-to-drishti-browser-ai>\apps\local-bridge"
-node dist/index.js
+$env:BRIDGE_AUTH_TOKEN = (Get-Content ".drishti-token" -Raw).Trim()
+node apps/local-bridge/dist/index.js
 ```
-Output:
-```
-[INFO] Starting Drishti Browser AI Bridge v0.1.3
-[INFO] WebSocket port: 7483
-[INFO] Auth token: ****xxxx (configured)
-[INFO] Bridge ready. Waiting for Chrome Extension connection...
-```
-
----
-
-## 5. Configure Extension Settings
-
-1. Click the extension icon in Chrome/Brave toolbar → **Settings**.
-2. Paste your 64-character token from `.drishti-token` (or click **Generate** in Settings and sync via `pnpm setup:agent -- --token <token>`).
-3. Click **Run Ping** to verify green `ONLINE` status.
-4. Click **Save Changes**.
+Then paste the token under **Options → Connection & Bridge → Advanced / WebSocket Fallback Settings**.
 
 ---
 

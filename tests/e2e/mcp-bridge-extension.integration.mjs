@@ -99,41 +99,106 @@ async function main() {
     if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 15000 });
     const extId = new URL(sw.url()).host;
 
-    // Seed auth token into extension storage & connect via options page
+    // Seed auth token & ephemeral bridge port into extension storage, then trigger reconnect
     const optPage = await context.newPage();
     await optPage.goto(`chrome-extension://${extId}/src/options/options.html`);
-    await optPage.evaluate(async (tok) => {
-      await chrome.storage.local.set({ bridgeAuthToken: tok, automationEnabled: true });
-    }, token);
+    await optPage.evaluate(async ({ tok, port }) => {
+      await chrome.storage.local.set({ bridgeAuthToken: tok, automationEnabled: true, bridgePort: port });
+      await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION', token: tok, port }).catch(() => {});
+    }, { tok: token, port: wsPort });
 
-    // Also verify extension background loads and can execute against fixture page directly via WebSocket
+    // Also verify extension background loads and can execute against fixture page
     const page = await context.newPage();
     await page.goto(fixtureUrl);
     assert.equal(await page.title(), 'Drishti Fixture');
     console.log(`[INT OK] Fixture page loaded at ${fixtureUrl}`);
 
-    // Connect MCP WebSocket client to ephemeral bridge
-    const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
-    await new Promise((res, rej) => {
-      ws.addEventListener('open', res, { once: true });
-      ws.addEventListener('error', rej, { once: true });
+    // Connect MCP stdio server to ephemeral bridge and wait for extension registration
+    const mcpEntry = path.join(ROOT, 'apps', 'mcp-server', 'dist', 'index.js');
+    const mcp = spawn(process.execPath, [mcpEntry], {
+      env: { ...process.env, BRIDGE_WS_URL: `ws://127.0.0.1:${wsPort}`, BRIDGE_AUTH_TOKEN: token },
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
-    ws.send(JSON.stringify({ type: 'auth', token, client: 'mcp' }));
-    await new Promise((res) => {
-      const onMsg = (ev) => {
-        const m = JSON.parse(String(ev.data));
-        if (m.type === 'auth:ok' || m.type === 'auth_ok') {
-          ws.removeEventListener('message', onMsg);
-          res();
-        }
-      };
-      ws.addEventListener('message', onMsg);
+    let mcpBuf = '';
+    const pending = new Map();
+    mcp.stdout.on('data', (d) => {
+      mcpBuf += d.toString();
+      let nl;
+      while ((nl = mcpBuf.indexOf('\n')) >= 0) {
+        const line = mcpBuf.slice(0, nl).trim();
+        mcpBuf = mcpBuf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.id && pending.has(msg.id)) {
+            const { resolve } = pending.get(msg.id);
+            pending.delete(msg.id);
+            resolve(msg);
+          }
+        } catch {}
+      }
     });
-    console.log('[INT OK] MCP WebSocket client authenticated with Local Bridge');
-    ws.close();
+    let rpcId = 1;
+    const callRpc = (method, params) => new Promise((resolve, reject) => {
+      const id = rpcId++;
+      const t = setTimeout(() => { pending.delete(id); reject(new Error(`RPC timeout: ${method}`)); }, 15000);
+      pending.set(id, {
+        resolve: (msg) => { clearTimeout(t); resolve(msg); },
+      });
+      mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    });
+
+    await callRpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'int', version: '1.0' } });
+
+    // Wait for extension to connect to ephemeral bridge
+    let connected = false;
+    let lastStatusTxt = '';
+    for (let i = 0; i < 15; i++) {
+      const st = await callRpc('tools/call', { name: 'browser_status', arguments: {} });
+      lastStatusTxt = st?.result?.content?.[0]?.text || '';
+      if (!st?.result?.isError && (lastStatusTxt.includes('bridgeConnected') || lastStatusTxt.includes('CONNECTED'))) {
+        connected = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    assert.ok(connected, `Extension should connect to ephemeral bridge via bridgePort (last: ${lastStatusTxt})`);
+    console.log('[INT OK] Extension connected to ephemeral Local Bridge');
+
+    // Regression: navigate TWICE to the same fixture URL, then click immediately without wait_for
+    const nav1 = await callRpc('tools/call', { name: 'browser_navigate', arguments: { url: fixtureUrl } });
+    const nav1Json = JSON.parse(nav1.result.content[0].text);
+    assert.equal(nav1Json.verified, true, 'First navigate must return verified:true');
+
+    const nav2 = await callRpc('tools/call', { name: 'browser_navigate', arguments: { url: fixtureUrl } });
+    const nav2Json = JSON.parse(nav2.result.content[0].text);
+    assert.equal(nav2Json.verified, true, 'Second same-URL navigate must return verified:true');
+
+    const clickRes = await callRpc('tools/call', { name: 'browser_click', arguments: { selector: '#btn-click' } });
+    assert.ok(!clickRes.result.isError, 'Immediate click after double-navigate must succeed without wait_for');
+    const statusText = await callRpc('tools/call', { name: 'browser_evaluate', arguments: { fn: "() => document.getElementById('status')?.textContent" } });
+    assert.ok(statusText.result.content[0].text.includes('Clicked!'), 'Click must update #status to Clicked!');
+    console.log('[INT OK] Double same-URL navigate + immediate click verified');
+
+    // Screenshot & PDF disk export checks
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'drishti-media-'));
+    const pngPath = path.join(outDir, 'fixture.png');
+    const pdfPath = path.join(outDir, 'fixture.pdf');
+
+    const shotRes = await callRpc('tools/call', { name: 'browser_screenshot', arguments: { path: pngPath } });
+    assert.ok(!shotRes.result.isError, 'browser_screenshot(path) should succeed');
+    const pngBuf = fs.readFileSync(pngPath);
+    assert.ok(pngBuf.length > 500 && pngBuf[0] === 0x89 && pngBuf[1] === 0x50 && pngBuf[2] === 0x4e && pngBuf[3] === 0x47, 'Saved screenshot must have valid PNG signature');
+
+    const pdfRes = await callRpc('tools/call', { name: 'browser_print_pdf', arguments: { path: pdfPath, format: 'A4' } });
+    assert.ok(!pdfRes.result.isError, 'browser_print_pdf(path) should succeed');
+    const pdfBuf = fs.readFileSync(pdfPath);
+    assert.ok(pdfBuf.length > 1000 && pdfBuf.slice(0, 5).toString('ascii') === '%PDF-', 'Saved PDF must have valid %PDF- signature');
+    fs.rmSync(outDir, { recursive: true, force: true });
+    mcp.kill('SIGTERM');
+    console.log('[INT OK] Valid PNG and PDF files verified on disk');
 
     // 5. Verify MCP server does NOT exit code 13 or hang on wrong auth token (<3s)
-    const mcpEntry = path.join(ROOT, 'apps', 'mcp-server', 'dist', 'index.js');
     const badStart = Date.now();
     const badMcp = spawn(process.execPath, [mcpEntry], {
       env: { ...process.env, BRIDGE_WS_URL: `ws://127.0.0.1:${wsPort}`, BRIDGE_AUTH_TOKEN: 'f'.repeat(64) },

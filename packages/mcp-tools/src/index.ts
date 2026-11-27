@@ -12,6 +12,7 @@ export const ALL_MCP_TOOL_NAMES = [
   'browser_observe',
   'browser_snapshot',
   'browser_screenshot',
+  'browser_print_pdf',
   'browser_inspect',
   'browser_get_page_info',
   'browser_bridge_health',

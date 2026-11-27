@@ -36,40 +36,32 @@ Always select the compiled directory:
 
 ---
 
-## 3. "Connection Refused on ws://127.0.0.1:7483"
+## 3. "Native Host Not Found" or "Connection Refused on ws://127.0.0.1:7483"
 
 ### Symptoms
-Options ping test shows:
-`Connection refused on ws://127.0.0.1:7483. Make sure bridge is running with 'pnpm bridge:start'`
+Options ping test shows `Connection refused` or Native Messaging disconnects.
 
 ### Resolution
-1. Verify the bridge process is listening in PowerShell:
+1. **Recommended (Zero-Token Native Pipe):** Register the Native Messaging host for Chrome, Brave, Edge, and Chromium:
    ```powershell
-   Get-NetTCPConnection -LocalPort 7483
+   pnpm native:install
    ```
-2. If nothing is listening, start the bridge daemon:
+   Then reload `extension-ready-to-install/` in `chrome://extensions` or `brave://extensions` and click **Test Bridge Ping**.
+2. **If using WebSocket Fallback (`ws://127.0.0.1:7483`):** Start the bridge on demand:
    ```powershell
-   $env:BRIDGE_AUTH_TOKEN = "YOUR_64_CHARACTER_BRIDGE_TOKEN"
-   cd "<path-to-drishti-browser-ai>\apps\local-bridge"
-   node dist/index.js
+   $env:BRIDGE_AUTH_TOKEN = (Get-Content ".drishti-token" -Raw).Trim()
+   node apps/local-bridge/dist/index.js
    ```
-3. In Chrome/Brave Settings, make sure the token is entered:
-   `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-4. Click **Test Bridge Ping**.
 
 ---
 
-## 4. "Authentication Rejected: Invalid Auth Token"
+## 4. "Authentication Rejected: Invalid Auth Token" (WebSocket Fallback Only)
 
 ### Cause
-Mismatch between the token configured in the bridge daemon and the token saved in the extension settings.
+Only applies when using WebSocket fallback (`ws://127.0.0.1:7483`) instead of Native Messaging (`pnpm native:install`).
 
 ### Resolution
-The active 64-character SHA-256 token is:
-```
-YOUR_64_CHARACTER_BRIDGE_TOKEN
-```
-Copy and paste this exact token into Settings and click **Save Changes**.
+Either switch to **Native Messaging** (`pnpm native:install`) so no token is needed, or paste the matching token from `.drishti-token` into **Options → Connection & Bridge → Advanced / WebSocket Fallback Settings**.
 
 ---
 

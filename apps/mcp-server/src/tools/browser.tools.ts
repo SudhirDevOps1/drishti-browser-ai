@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import { BridgeClient } from '../bridge-client.js';
 
@@ -31,6 +33,16 @@ const BrowserScreenshotSchema = z.object({
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   format: z.enum(['png', 'jpeg']).optional().describe('Image format. Default: png.'),
   quality: z.number().int().min(1).max(100).optional().describe('JPEG quality (1-100). Ignored for PNG.'),
+  path: z.string().optional().describe('Optional file path to save the PNG/JPEG screenshot to disk.'),
+  inline: z.boolean().optional().describe('Include inline base64 image block even when path is provided. Default: false when path is set.'),
+});
+
+const BrowserPrintPdfSchema = z.object({
+  path: z.string().min(1).describe('File path to write the rendered PDF document.'),
+  format: z.enum(['A4', 'Letter']).optional().describe('Paper format (A4 or Letter). Default: A4.'),
+  landscape: z.boolean().optional().describe('Landscape orientation. Default: false.'),
+  printBackground: z.boolean().optional().describe('Include background graphics. Default: true.'),
+  tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
 });
 
 const BrowserInspectSchema = z.object({
@@ -88,15 +100,32 @@ export const BROWSER_TOOLS = [
   {
     name: 'browser_screenshot',
     description:
-      'Captures a screenshot of the specified (or active) tab and returns it inline as an image plus metadata.',
+      'Captures a screenshot of the specified (or active) tab, optionally saving it to `path`, and returns it inline as an image plus metadata.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         tabId: { type: 'number', description: 'Target tab ID. Defaults to active tab.' },
         format: { type: 'string', enum: ['png', 'jpeg'], description: 'Image format. Default: png.' },
         quality: { type: 'number', description: 'JPEG quality 1-100. Ignored for PNG.' },
+        path: { type: 'string', description: 'Optional file path to save the screenshot on disk.' },
       },
       required: [],
+    },
+  },
+  {
+    name: 'browser_print_pdf',
+    description:
+      'Render the specified (or active) tab to a PDF file via CDP Page.printToPDF and save it directly to `path` (no OS Save As dialog required).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Output PDF file path.' },
+        format: { type: 'string', enum: ['A4', 'Letter'], description: 'Paper format. Default: A4.' },
+        landscape: { type: 'boolean', description: 'Landscape orientation. Default: false.' },
+        printBackground: { type: 'boolean', description: 'Include background graphics. Default: true.' },
+        tabId: { type: 'number', description: 'Target tab ID. Defaults to active tab.' },
+      },
+      required: ['path'],
     },
   },
   {
@@ -187,6 +216,21 @@ export async function handleBrowserTool(name: string, args: unknown, bridge: Bri
         size?: number;
       };
       if (result?.base64) {
+        const buf = Buffer.from(result.base64, 'base64');
+        let savedPath: string | undefined;
+        if (params.path) {
+          savedPath = path.resolve(params.path);
+          mkdirSync(path.dirname(savedPath), { recursive: true });
+          writeFileSync(savedPath, buf);
+          if (params.inline !== true) {
+            return ok({
+              ok: true,
+              path: savedPath,
+              format: result.format ?? 'png',
+              sizeBytes: buf.length,
+            });
+          }
+        }
         const mimeType = result.format === 'jpeg' ? 'image/jpeg' : 'image/png';
         return {
           content: [
@@ -194,8 +238,9 @@ export async function handleBrowserTool(name: string, args: unknown, bridge: Bri
             {
               type: 'text' as const,
               text: JSON.stringify({
-                format: result.format || 'png',
+                format: result.format ?? 'png',
                 size: result.size ?? result.base64.length,
+                ...(savedPath ? { path: savedPath } : {}),
                 note: 'Inline image attached above. Tip: use browser_observe or post-action DOM summary instead of screenshots after every click.',
               }),
             },
@@ -203,6 +248,24 @@ export async function handleBrowserTool(name: string, args: unknown, bridge: Bri
         };
       }
       return ok(result);
+    }
+
+    case 'browser_print_pdf': {
+      const params = BrowserPrintPdfSchema.parse(args ?? {});
+      const result = (await bridge.sendCommand('PRINT_PDF', {
+        tabId: params.tabId,
+        format: params.format ?? 'A4',
+        landscape: params.landscape ?? false,
+        printBackground: params.printBackground ?? true,
+      })) as { base64?: string; format?: string };
+      if (!result?.base64) {
+        throw new Error('PRINT_PDF returned empty PDF data');
+      }
+      const outPath = path.resolve(params.path);
+      mkdirSync(path.dirname(outPath), { recursive: true });
+      const buf = Buffer.from(result.base64, 'base64');
+      writeFileSync(outPath, buf);
+      return ok({ ok: true, path: outPath, format: result.format || params.format || 'A4', sizeBytes: buf.length });
     }
 
     case 'browser_inspect': {

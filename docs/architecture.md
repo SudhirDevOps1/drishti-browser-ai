@@ -25,31 +25,31 @@ Drishti Browser AI is engineered around five fundamental architectural tenets:
 +------------------------------------+------------------------------------+
 |                      apps/mcp-server (Node.js)                          |
 |  - Official @modelcontextprotocol/sdk Server                            |
-|  - 62 Registered & Validated Tools                                      |
+|  - 63 Registered & Validated Tools                                      |
 |  - Structured Error Handlers & Parameter Validation                     |
 +------------------------------------+------------------------------------+
                                      | In-process bridge client
                                      v
 +------------------------------------+------------------------------------+
 |                     apps/local-bridge (Node.js)                         |
-|  - Authenticated WebSocket Server (127.0.0.1:7483)                      |
-|  - Constant-time 256-bit Token Verification                             |
+|  - Native Messaging Host (stdin/stdout 4-byte JSON) + Named Pipe        |
+|  - Optional Authenticated WebSocket Fallback (127.0.0.1:7483)           |
 |  - Command Router & Request-Response Correlator                         |
 +------------------------------------+------------------------------------+
-                                     | ws://127.0.0.1:7483
+                                     | Native Pipe (or ws://127.0.0.1:7483)
                                      v
 +------------------------------------+------------------------------------+
 |                  apps/chrome-extension (Manifest V3)                   |
-|  - Background Service Worker (manages WebSocket connection & APIs)      |
-|  - Content Scripts (console interception, DOM queries)                  |
-|  - React 18 Popup Dashboard & Full Side Panel View                      |
+|  - Background Service Worker (Native/WS dual-transport + CdpSessionMgr) |
+|  - Content Scripts (console interception, DOM queries, Visual HUD)      |
+|  - React 18 Popup Dashboard, Sidepanel Control Deck & Options           |
 +------------------------------------+------------------------------------+
-                                     | Chrome Extension APIs
+                                     | Chrome Extension APIs + Persistent CDP
                                      v
 +------------------------------------+------------------------------------+
-|                        Google Chrome Browser                            |
+|                Chrome / Brave / Edge / Chromium Browser                 |
 |  - Live DOM & Accessibility Tree                                        |
-|  - Viewport Screen Capture (captureVisibleTab)                          |
+|  - Persistent chrome.debugger Sessions (60s idle auto-detach)           |
 |  - Script Injection (chrome.scripting.executeScript)                    |
 +-------------------------------------------------------------------------+
 ```
@@ -58,15 +58,13 @@ Drishti Browser AI is engineered around five fundamental architectural tenets:
 
 ## 3. Communication Protocol
 
-### WebSocket Handshake
-1. The local bridge listens on `ws://127.0.0.1:7483`.
-2. When Chrome starts or the extension reloads, the Background Service Worker initiates an outbound WebSocket connection to the bridge.
-3. The extension immediately sends an authentication payload:
-   ```json
-   { "type": "auth", "token": "<64-hex-token>" }
-   ```
-4. The bridge performs constant-time comparison against `process.env.BRIDGE_AUTH_TOKEN`.
-5. If valid, the bridge replies with `{ "type": "auth_ok" }`. If invalid, `{ "type": "auth_fail" }` is returned and the socket is closed immediately.
+### Primary: Native Messaging + Named Pipe (Zero Token)
+1. The extension calls `chrome.runtime.connectNative('com.drishti.bridge')`, and Chromium spawns `apps/local-bridge/dist/index.js --native-host` on demand (verified via `allowed_origins` Extension ID).
+2. The Native Host opens `\\.\pipe\drishti-bridge` (Windows) / `/tmp/drishti-bridge.sock` (POSIX) for MCP clients (`BridgeClient`).
+
+### Fallback: WebSocket Handshake (`ws://127.0.0.1:7483`)
+1. If Native Messaging is not installed, the extension falls back to `ws://127.0.0.1:7483` and authenticates with `{ "type": "auth", "token": "<64-hex-token>" }`.
+2. The bridge performs constant-time comparison against `process.env.BRIDGE_AUTH_TOKEN`, replying `{ "type": "auth_ok" }` or `{ "type": "auth_fail" }` before closing (`4003`).
 
 ### Command Execution Cycle
 1. The AI Agent calls an MCP tool (e.g. `browser_click({ selector: "button#submit" })`).

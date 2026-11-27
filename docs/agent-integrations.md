@@ -2,7 +2,9 @@
 
 Comprehensive connection instructions for every major AI coding agent and MCP application.
 
-> **1-Command Zero-Clone Setup:** Run `pnpm setup:agent -- --client auto` (or pass `--client antigravity|gemini|opencode|claude|cursor|codex`) inside the Drishti repo root to auto-generate `.drishti-token`, configure MCP, and install the `drishti-browser-agent` skill automatically.
+> **1-Command Zero-Token Setup:** Run `pnpm native:install && pnpm setup:agent -- --client auto` (or pass `--client antigravity|gemini|opencode|claude|cursor|codex`) inside the Drishti repo root to register Native Messaging (Chrome, Brave, Edge, Chromium), configure MCP, and install the `drishti-browser-agent` skill automatically.
+>
+> With Native Messaging installed, MCP clients connect over `\\.\pipe\drishti-bridge` without needing `BRIDGE_AUTH_TOKEN` or manual `pnpm bridge:start`. (WebSocket `ws://127.0.0.1:7483` + `BRIDGE_AUTH_TOKEN` remains supported as an optional fallback.)
 
 ---
 
@@ -13,11 +15,7 @@ Comprehensive connection instructions for every major AI coding agent and MCP ap
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
     }
   }
 }
@@ -32,11 +30,7 @@ Comprehensive connection instructions for every major AI coding agent and MCP ap
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
     }
   }
 }
@@ -52,11 +46,7 @@ Comprehensive connection instructions for every major AI coding agent and MCP ap
     "drishti-browser-ai": {
       "type": "local",
       "command": ["node", "<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "enabled": true,
-      "environment": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
+      "enabled": true
     }
   }
 }
@@ -79,11 +69,7 @@ Or configure `~/.claude/mcp.json`:
   "mcpServers": {
     "drishti-browser-ai": {
       "command": "node",
-      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"],
-      "env": {
-        "BRIDGE_AUTH_TOKEN": "YOUR_64_CHARACTER_BRIDGE_TOKEN",
-        "BRIDGE_WS_URL": "ws://127.0.0.1:7483"
-      }
+      "args": ["<path-to-drishti-browser-ai>/apps/mcp-server/dist/index.js"]
     }
   }
 }

@@ -68,13 +68,14 @@ name: drishti-browser-agent
 description: Autonomous Chrome/Brave browser controller via Drishti Browser AI MCP. Prefer browser_run, workflow_match/browser_task, browser_observe, and @eN refs over screenshots after every click.
 ---
 
-# Drishti Browser AI — Agent Protocol (v0.1.3)
+# Drishti Browser AI — Agent Protocol (v0.1.3, 63 MCP Tools)
 
-1. **Check SQLite Workflow Cache First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` before planning clicks from scratch.
-2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` in one call (compact diffs, 30s budget, auto-cached on success).
-3. **Avoid Redundant Screenshots**: Use \`browser_observe()\` and \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` when lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is active.
-4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_handle_save_dialog()\` for \`blob:\` Save As dialogs, \`browser_wait_download()\` for large files, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to inspect failures.
-5. **Fast Typing & Known Limits**: Use \`browser_fill()\` or \`browser_type()\`. Never script \`chrome://\` URLs or solve CAPTCHAs; \`browser_batch_compare\` is capped at 3 URLs.
+1. **Zero-Token Native Pipe**: Connects automatically via Native Messaging (\`com.drishti.bridge\`) + Named Pipe (\`\\\\.\\pipe\\drishti-bridge\`) across Chrome, Brave, Edge, and Chromium (WebSocket \`ws://127.0.0.1:7483\` is automatic fallback).
+2. **Check SQLite Workflow Cache First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` before planning clicks from scratch.
+3. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` in one call (compact diffs, 30s budget, auto-cached on success).
+4. **Avoid Redundant Screenshots**: Use \`browser_observe()\`, \`browser_snapshot()\` (\`@eN\` refs), \`browser_read()\`, \`browser_grep()\`, and \`browser_evaluate()\` instead of \`browser_screenshot()\` after every click. Passing \`path\` to \`browser_screenshot({ path })\` saves to disk and returns compact JSON (~50 tokens, no inline base64 unless \`inline: true\`); use \`browser_print_pdf({ path })\` for PDFs.
+5. **Tab Isolation, Bridge Power & Human Handoff**: \`browser_new_tab\` returns \`tabId\` and waits for initial load; pin your target tab with \`browser_use_tab({ tabId })\`. Respect **AI: PAUSED** and **Turn OFF** bridge switches. Use \`browser_download()\`, \`browser_confirm()\`, \`browser_request_human_help({ kind, reason })\`, and \`browser_audit({ tool, outcome, since, limit })\`.
+6. **Fast Typing & Known Limits**: Use \`browser_fill()\` or \`browser_type()\`. Never script \`chrome://\` URLs or solve CAPTCHAs; \`browser_batch_compare\` is capped at 3 URLs.
 `;
   if (!dryRun) {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -225,6 +226,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   const summary = runSetup(args);
   console.log('[Drishti Setup] Completed zero-clone MCP & Skill registration:');
   console.log(JSON.stringify({ ...summary, token: undefined }, null, 2));
-  console.log('\n[Drishti Setup] 64-Char Auth Token (copy and paste into Chrome Extension Settings -> Connection & Bridge):');
-  console.log(summary.token);
+  console.log('\n[Drishti Setup] Next step: run `pnpm native:install` once for zero-token Chrome/Brave/Edge auto-connect, then reload `extension-ready-to-install/`.');
+  console.log('[Drishti Setup] (Fallback WebSocket token saved silently in .drishti-token if needed.)');
 }

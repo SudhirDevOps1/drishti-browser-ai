@@ -17,7 +17,7 @@
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-v2024--11--05-00E5FF?style=flat-square" alt="MCP Protocol" /></a>
   <a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Chrome%20%26%20Brave-Manifest_V3-625BFF?style=flat-square" alt="Chrome MV3" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Strict_v5.7-3178C6?style=flat-square" alt="TypeScript Strict" /></a>
-  <a href="https://vitest.dev/"><img src="https://img.shields.io/badge/Vitest-28%2F28_Passing-10B981?style=flat-square" alt="Vitest" /></a>
+  <a href="https://vitest.dev/"><img src="https://img.shields.io/badge/Vitest-46%2F46_Passing-10B981?style=flat-square" alt="Vitest" /></a>
   <a href="https://playwright.dev/"><img src="https://img.shields.io/badge/Playwright_E2E-4%2F4_Passing-10B981?style=flat-square" alt="Playwright E2E" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-625BFF?style=flat-square" alt="MIT License" /></a>
 </p>
@@ -25,7 +25,7 @@
 <p align="center">
   <a href="https://sudhirdevops1.github.io/drishti-browser-ai/">Live Website</a> •
   <a href="#installation--setup">Installation</a> •
-  <a href="#mcp-tools-catalog-55-tools">55 MCP Tools</a> •
+  <a href="#mcp-tools-catalog-63-tools">63 MCP Tools</a> •
   <a href="#security--privacy-architecture">Security</a> •
   <a href="docs/windows-install.md">Windows Guide</a> •
   <a href="docs/troubleshooting.md">Troubleshooting</a>
@@ -35,13 +35,14 @@
 
 ## Introduction
 
-**Drishti Browser AI** connects autonomous AI coding agents (**Google Antigravity**, **OpenCode**, **Claude Code**, **Cursor**, **OpenAI Codex**) directly to your real, daily **Google Chrome** or **Brave** browser session over an on-demand, token-authenticated localhost WebSocket bridge (`ws://127.0.0.1:7483`).
+**Drishti Browser AI** connects autonomous AI coding agents (**Google Antigravity**, **OpenCode**, **Claude Code**, **Cursor**, **OpenAI Codex**) directly to your real, daily **Google Chrome**, **Brave**, **Microsoft Edge**, or **Chromium** browser session via **OS Native Messaging (`com.drishti.bridge`) + Named Pipe (`\\.\pipe\drishti-bridge`)** (with automatic `ws://127.0.0.1:7483` WebSocket fallback).
 
 Unlike headless browser scrapers that lose your logged-in sessions or operate invisibly, Drishti runs inside your live browser profile with:
+- **Zero-Token Native Pipe + On-Demand Power Switch**: Browser spawns the bridge on demand via `chrome.runtime.connectNative` (no manual `pnpm bridge:start` or token copy-paste), and the Popup **`Turn OFF` / `Turn ON`** button lets you cleanly disconnect and shut down the Native Host anytime.
+- **Persistent CDP Sessions**: `CdpSessionManager` attaches `chrome.debugger` once per target tab across clicks, `evaluate`, and `printToPDF` (2s attach guard, auto-detaching after 60s idle).
+- **Compact Disk Screenshots**: `browser_screenshot({ path })` saves PNG/JPEG to disk and returns ~50-token metadata (pass `inline: true` when base64 is needed).
 - **Target Tab Locking** to bind automation to a single chosen tab.
 - **Shadow DOM Visual Control Overlay** (`36x36` cubic Bezier cursor, fading SVG trail, collision-free action badges, click ripples, drag trajectories, scroll progress bar, and live typing counters).
-- **Trusted CDP Input** (`chrome.debugger` mouse & keyboard events) with automatic fallback and DevTools protection.
-- **On-Demand Localhost Bridge** with 64-character SHA-256 token authentication and zero background OS auto-start persistence.
 
 ---
 
@@ -91,18 +92,18 @@ graph TD
   end
 
   subgraph MCP_GATEWAY ["MCP Server (apps/mcp-server)"]
-    MS["55 MCP Tools (@modelcontextprotocol/sdk + Zod)"]
+    MS["63 MCP Tools (@modelcontextprotocol/sdk + Zod)"]
     SQL["node:sqlite Memory & Selector Cache"]
     CLI["scripts/drishti-exec.mjs"]
   end
 
   subgraph WS_BRIDGE ["Local Bridge (apps/local-bridge)"]
-    WS["WebSocket Server (ws://127.0.0.1:7483)"]
-    AUTH["64-char SHA-256 Token Handshake"]
+    PIPE["Native Host + Named Pipe (\\\\.\\pipe\\drishti-bridge)"]
+    WS["Optional WebSocket Fallback (ws://127.0.0.1:7483)"]
   end
 
-  subgraph MV3_EXT ["Chrome / Brave MV3 Extension (apps/chrome-extension)"]
-    BG["Service Worker (background.ts)"]
+  subgraph MV3_EXT ["Chrome / Brave / Edge MV3 Extension (apps/chrome-extension)"]
+    BG["Service Worker + CdpSessionManager"]
     VIS["Shadow DOM Visual Overlay (content.ts)"]
     UI["Popup, Sidepanel Control Deck & Options"]
   end
@@ -114,18 +115,18 @@ graph TD
   CR -->|stdio| MS
   CD -->|stdio| MS
 
-  CLI --> WS
+  CLI --> PIPE
   MS --> SQL
-  MS --> WS
-  WS --> AUTH
-  AUTH --> BG
+  MS --> PIPE
+  PIPE --> BG
+  WS -.-> BG
   BG --> VIS
   BG --> UI
 ```
 
 ---
 
-## MCP Tools Catalog (62 Tools)
+## MCP Tools Catalog (63 Tools)
 
 Registered tool definitions live in `apps/mcp-server/src/tools/index.ts`; parameter schemas and examples are documented in [docs/mcp-tools-reference.md](docs/mcp-tools-reference.md).
 
@@ -146,38 +147,37 @@ Registered tool definitions live in `apps/mcp-server/src/tools/index.ts`; parame
 
 ### 🤖 1-Prompt AI Auto-Install & Setup (Any AI Agent — Zero-Clone Safe)
 
-Give this single prompt to **Google Antigravity**, **Gemini CLI**, **OpenCode**, **Claude Code**, **Cursor**, or **OpenAI Codex** — it checks if Drishti is already installed (never re-cloning into unrelated projects), generates your 64-char token, auto-detects or targets your active AI client, installs the `drishti-browser-agent` skill, and verifies `ONLINE` status:
+Give this single prompt to **Google Antigravity**, **Gemini CLI**, **OpenCode**, **Claude Code**, **Cursor**, or **OpenAI Codex** — it checks if Drishti is already installed, registers Native Messaging across Chrome/Brave/Edge/Chromium (zero token needed), configures your AI client, and installs the `drishti-browser-agent` skill:
 
 ```markdown
 <DRISHTI_AUTO_INSTALL>
-Set up Drishti Browser AI (दृष्टि) for me so you can control my Chrome/Brave browser via MCP:
+Set up Drishti Browser AI (दृष्टि) for me so you can control my Chrome/Brave/Edge browser via MCP:
 1. First check if Drishti Browser AI is already installed locally (look for `apps/mcp-server/dist/index.js`).
-   - If found **and** `scripts/setup-agent.mjs` is missing, update it in place: `git pull origin main && pnpm install && pnpm -r run build`.
    - Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
-2. Inside the Drishti folder, run `pnpm setup:agent -- --client <your_client>` (use your own client name: `antigravity`, `gemini`, `opencode`, `claude`, `cursor`, `codex`, or `auto` to auto-detect installed AI clients):
-   - Auto-generates a random 64-hex `.drishti-token` if missing (rejects placeholder tokens).
-   - Registers `drishti-browser-ai` (59 MCP tools; supports `DRISHTI_LAZY_TOOLS=1`) in that AI client's MCP config.
-   - Installs `drishti-browser-agent/SKILL.md` (`browser_run`, `browser_task`, `browser_request_human_help`, `browser_audit`) into that client's skills directory so it loads automatically.
-3. Start the Local Bridge on-demand (`pnpm bridge:start`, port `7483`) — never install OS auto-start scripts.
-4. Clean up any temporary setup files; if freshly cloned solely for runtime use (not development), remove non-runtime folders (`apps/web-showcase`, `tests`) after building.
-5. **MUST print the exact 64-character auth token from `.drishti-token` clearly in your final reply to me**, then guide me to paste it in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
+2. Inside the Drishti folder, run `pnpm native:install && pnpm setup:agent -- --client <your_client>` (or `auto`):
+   - Registers Native Messaging (`com.drishti.bridge`) for Chrome, Brave, Edge & Chromium (no manual `pnpm bridge:start` or token copy-paste needed).
+   - Registers `drishti-browser-ai` (63 MCP tools; supports `DRISHTI_LAZY_TOOLS=1`) in that AI client's MCP config.
+   - Installs `drishti-browser-agent/SKILL.md` into that client's skills directory.
+3. Clean up any temporary setup files; if freshly cloned solely for runtime use, remove non-runtime folders (`apps/web-showcase`, `tests`) after building.
+4. Tell me to reload `extension-ready-to-install/` once in `chrome://extensions/` (or `brave://extensions/`) and verify it auto-connects.
 </DRISHTI_AUTO_INSTALL>
 ```
 
-### 1. Clone, Install & Build
+### 1. Clone, Install, Build & Register Native Host
 ```bash
 git clone https://github.com/SudhirDevOps1/drishti-browser-ai.git
 cd drishti-browser-ai
 pnpm install
 pnpm -r run build
+pnpm native:install
 ```
-`pnpm -r run build` compiles all 11 workspace packages, runs `tsc --noEmit` on the extension, and bundles `apps/chrome-extension/dist/`.
+`pnpm -r run build` compiles all 11 workspace packages and bundles `apps/chrome-extension/dist/`. `pnpm native:install` registers Native Messaging for Chrome, Brave, Edge, and Chromium.
 
-### 2. Load the Extension in Chrome or Brave
-1. Open `chrome://extensions/` (or `brave://extensions/`).
+### 2. Load the Extension in Chrome, Brave, or Edge
+1. Open `chrome://extensions/` (or `brave://extensions/` / `edge://extensions/`).
 2. Enable **Developer mode** (top-right).
-3. Click **Load unpacked** and select `apps/chrome-extension/dist` (never the uncompiled `apps/chrome-extension` root).
-4. Pin **Drishti Browser AI** to the toolbar.
+3. Click **Load unpacked** and select `extension-ready-to-install/` (or `apps/chrome-extension/dist`).
+4. Pin **Drishti Browser AI** to the toolbar — it auto-connects with zero token setup.
 
 ### 3. Configure Auth Token & Start the Local Bridge (On-Demand)
 Generate or auto-configure a 64-character token without committing `.drishti-token`:

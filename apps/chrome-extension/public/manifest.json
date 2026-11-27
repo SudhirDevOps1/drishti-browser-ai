@@ -3,6 +3,7 @@
   "name": "Drishti Browser AI",
   "short_name": "Drishti AI",
   "version": "0.1.3",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuQRaGEv4tJv6NDoaUGE8Lx825MAKENfyq/baywI4qOjBb9jjJDPZMb+YjuJTPQ44N4wDKMsdNGzDRPuBXVdiVBxLpjHApEuOppk9mdRLiJbZRuqEKohdqF78rQwLcw6UjU/57W61Y3TAoqpWGicyMtGY1a9MlzUR7tTnYWJroMaipqLYVteoYia9WyJFsteOY9v4S91MIRMUd2LwB+U+xM/g5Ouh57E8UjYOU/zix6rrHUoqSEHHFZ4xmwXydoye8CCXTJ7qePf9X8HaYxgmoiPiqM4hnuQZiA6TjqmPJsBT52iuxWtnBULA/WHvSIYYY9sRfYONV2lJ3lwCO0mn3wIDAQAB",
   "description": "Universal Multi-Agent Browser Automation Platform — Connect Antigravity, OpenCode, Claude Code, Cursor & Codex to your browser",
   "permissions": [
     "tabs",
@@ -13,7 +14,8 @@
     "notifications",
     "tabGroups",
     "downloads",
-    "debugger"
+    "debugger",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"

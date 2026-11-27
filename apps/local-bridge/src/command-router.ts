@@ -20,6 +20,7 @@ const ALLOWED_ACTIONS: ReadonlySet<string> = new Set([
   'GO_BACK',
   'GO_FORWARD',
   'SCREENSHOT',
+  'PRINT_PDF',
   'EXECUTE_SCRIPT',
   'OBSERVE',
   'browser_observe',

@@ -27,7 +27,11 @@ const NetworkInspectSchema = z.object({
 });
 
 const AuditSchema = z.object({
-  last: z.number().int().min(1).max(500).optional().describe('Number of recent entries to return (default 50, max 500).'),
+  last: z.number().int().min(1).max(500).optional().describe('Deprecated alias for limit (default 50, max 500).'),
+  limit: z.number().int().min(1).max(500).optional().describe('Number of recent entries to return (default 50, max 500).'),
+  tool: z.string().optional().describe('Filter by exact MCP tool name.'),
+  outcome: z.enum(['ok', 'error']).optional().describe('Filter by outcome (ok or error).'),
+  since: z.string().optional().describe('Filter entries with timestamp >= ISO string.'),
 });
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
@@ -78,11 +82,15 @@ export const DEBUGGING_TOOLS = [
   {
     name: 'browser_audit',
     description:
-      'Read the local JSONL audit log of MCP tool calls: timestamp, tool, tabId, outcome, durationMs, and error.',
+      'Read the local JSONL audit log of MCP tool calls: timestamp, tool, tabId, outcome, durationMs, and error. Supports filtering by tool, outcome, since, and limit.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        last: { type: 'number', description: 'Recent entries to return (default 50, max 500).' },
+        limit: { type: 'number', description: 'Recent entries to return (default 50, max 500).' },
+        last: { type: 'number', description: 'Alias for limit.' },
+        tool: { type: 'string', description: 'Filter by tool name.' },
+        outcome: { type: 'string', enum: ['ok', 'error'], description: 'Filter by outcome.' },
+        since: { type: 'string', description: 'ISO timestamp lower bound.' },
       },
       required: [],
     },
@@ -107,7 +115,7 @@ export async function handleDebuggingTool(name: string, args: unknown, bridge: B
     }
     case 'browser_audit': {
       const params = AuditSchema.parse(args ?? {});
-      const entries = readAuditLog(params.last ?? 50);
+      const entries = readAuditLog(params);
       return ok({ count: entries.length, entries });
     }
     default:

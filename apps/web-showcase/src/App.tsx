@@ -101,11 +101,11 @@ const FEATURES = [
   },
   {
     icon: ShieldCheck,
-    title: 'MV3 Hardened Security',
+    title: 'Native Pipe & MV3 Security',
     badge: 'Zero eval() Sinks',
     color: 'rose',
-    desc: 'Localhost 127.0.0.1 WebSocket bridge with 64-char timing-safe token, domain allowlist/blocklist, URL protocol enforcement, and origin checks.',
-    highlight: 'ws://127.0.0.1:7483',
+    desc: 'OS-authenticated Native Messaging + Named Pipe (\\\\.\\pipe\\drishti-bridge) across Chrome, Brave & Edge, with 127.0.0.1 WebSocket fallback.',
+    highlight: 'Native Pipe + WS Fallback',
   },
   {
     icon: GitBranch,
@@ -165,8 +165,8 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Extension Popup Quick Deck (Real UI)',
     category: 'Extension UI',
     image: './gallery/popup-quick-status.png',
-    desc: 'Instant popup showing live 127.0.0.1:7483 bridge status, Locked Target Tab indicator, and SSOT version badge.',
-    specs: ['Captured directly from Chromium MV3 v' + data.version, 'Live bridge heartbeat indicator', 'SSOT v' + data.version + ' badge'],
+    desc: 'Instant popup showing live Native Pipe / bridge status, Locked Target Tab indicator, and SSOT version badge.',
+    specs: ['Captured directly from Chromium MV3 v' + data.version, 'Live Native Pipe / WS heartbeat', 'SSOT v' + data.version + ' badge'],
     tags: ['Real Screenshot', 'Popup UI', 'Tailwind'],
     border: 'border-sky-500/30',
     glow: 'from-sky-500/15 to-indigo-600/10',
@@ -176,8 +176,8 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Permissions & Settings (Real UI)',
     category: 'Extension UI',
     image: './gallery/options-permissions.png',
-    desc: 'Dedicated Options page for managing Local MCP Bridge SHA-256 token auth, port 7483, domain policies, and Live Test Lab.',
-    specs: ['Captured directly from Chromium MV3 v' + data.version, '64-char SHA-256 bridge auth', 'ws://127.0.0.1:7483 transport'],
+    desc: 'Dedicated Options page for Native Browser Bridge transport, domain policies, AI Agent prompt, and Live Test Lab.',
+    specs: ['Captured directly from Chromium MV3 v' + data.version, 'Zero-token Native Messaging', 'Optional ws://127.0.0.1:7483 fallback'],
     tags: ['Real Screenshot', 'Options Page', 'Security'],
     border: 'border-emerald-500/30',
     glow: 'from-emerald-500/15 to-teal-600/10',
@@ -225,11 +225,11 @@ const GALLERY_ITEMS: GalleryItem[] = [
   },
   {
     id: 'security',
-    title: '127.0.0.1 Token Auth & MV3 Guard',
+    title: 'Native Pipe & Persistent CDP',
     category: 'Security & CI',
-    desc: '64-character timing-safe session token, strict origin allowlist, resilient WebSocket bridge, and zero eval() sinks.',
-    specs: ['Localhost-only ws://127.0.0.1:7483', 'Zod v4 strict schema validation', 'Automated security sink scan'],
-    tags: ['Zod v4', '127.0.0.1', 'Zero eval()'],
+    desc: 'OS-verified Native Messaging (com.drishti.bridge), Persistent chrome.debugger sessions (60s idle auto-detach), and zero eval() sinks.',
+    specs: ['Zero-token Named Pipe transport', 'Zod v4 strict schema validation', 'Automated security sink scan'],
+    tags: ['Native Pipe', 'Persistent CDP', 'Zero eval()'],
     border: 'border-amber-500/30',
     glow: 'from-amber-500/15 to-orange-600/10',
   },
@@ -238,7 +238,7 @@ const GALLERY_ITEMS: GalleryItem[] = [
     title: 'Playwright E2E & Release Pipeline',
     category: 'Security & CI',
     desc: 'Real Chromium extension smoke tests, strict tsc --noEmit gate, SSOT version verification, and automated Release Please.',
-    specs: ['4 Playwright Chromium E2E checks', '28 Vitest unit tests', 'SSOT version sync across 12 workspaces'],
+    specs: ['4 Playwright Chromium E2E checks', '46 Vitest unit tests (9 files)', 'SSOT version sync across 12 workspaces'],
     tags: ['Playwright', 'Vitest', 'Typecheck Gate'],
     border: 'border-emerald-500/30',
     glow: 'from-emerald-500/15 to-teal-600/10',
@@ -250,10 +250,10 @@ const TERMINAL_LINES = [
   { delay: 450,  text: '✓ 847 packages resolved', color: 'text-emerald-400' },
   { delay: 900,  text: '$ pnpm -r run build', color: 'text-cyan-300' },
   { delay: 1400, text: '✓ @drishti/shared-types & core packages built', color: 'text-slate-400' },
-  { delay: 1900, text: '✓ @drishti-browser-ai/mcp-server (55 tools) built', color: 'text-slate-400' },
+  { delay: 1900, text: '✓ @drishti-browser-ai/mcp-server (63 tools) built', color: 'text-slate-400' },
   { delay: 2400, text: '✓ chrome-extension: tsc --noEmit + vite build', color: 'text-emerald-400' },
   { delay: 2900, text: '$ pnpm test', color: 'text-cyan-300' },
-  { delay: 3300, text: '✓ 28/28 unit tests passed (7 files)', color: 'text-emerald-400' },
+  { delay: 3300, text: '✓ 46/46 unit tests passed (9 files)', color: 'text-emerald-400' },
   { delay: 3750, text: '$ pnpm test:e2e', color: 'text-cyan-300' },
   { delay: 4200, text: '✓ 4/4 Playwright Chromium E2E passed', color: 'text-emerald-400' },
   { delay: 4650, text: '🚀 All checks green — v' + data.version + ' live!', color: 'text-cyan-200' },
@@ -352,12 +352,12 @@ function GalleryPreview({ item }: { item: GalleryItem }) {
         <div className="p-3 h-full flex flex-col justify-center gap-2 font-mono text-[10px]">
           <div className="flex items-center justify-between bg-slate-900 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
             <span className="text-amber-300 flex items-center gap-1">
-              <Lock className="w-3 h-3" /> 127.0.0.1:7483
+              <Lock className="w-3 h-3" /> Native Pipe
             </span>
-            <span className="text-emerald-400">Token OK</span>
+            <span className="text-emerald-400">OS Auth OK</span>
           </div>
           <div className="bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-400 truncate">
-            token: 9f8a2c…e41b (64-char SHA)
+            com.drishti.bridge (Zero Token)
           </div>
         </div>
       );
@@ -764,12 +764,11 @@ export function App() {
 
   const activeInstallClient = INSTALL_CLIENTS.find(c => c.id === installClient) || INSTALL_CLIENTS[0];
   const autoInstallPrompt = `<DRISHTI_AUTO_INSTALL>
-Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave browser via MCP:
-1. Check if Drishti Browser AI is already installed locally (look for apps/mcp-server/dist/index.js). If found but scripts/setup-agent.mjs is missing, update it in place: git pull origin main && pnpm install && pnpm -r run build. Only clone ${data.repoUrl}.git into a dedicated tools folder (NOT inside my current project) if missing, then run: pnpm install && pnpm -r run build
-2. Inside the Drishti folder, run: pnpm setup:agent -- --client ${installClient} (generates random 64-hex .drishti-token, registers 59 MCP tools, and installs drishti-browser-agent/SKILL.md with browser_run & workflow cache)
-3. Start Local Bridge on-demand: pnpm bridge:start (ws://127.0.0.1:7483)
-4. Delete any temporary setup files; if freshly cloned solely for runtime use, remove non-runtime folders (apps/web-showcase, tests) after building.
-5. MUST print the exact 64-character auth token from .drishti-token clearly in your reply to me so I can paste it into Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
+Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brave/Edge browser via MCP:
+1. Check if Drishti Browser AI is already installed locally (look for apps/mcp-server/dist/index.js). Only clone ${data.repoUrl}.git into a dedicated tools folder (NOT inside my current project) if missing, then run: pnpm install && pnpm -r run build
+2. Inside the Drishti folder, run: pnpm native:install && pnpm setup:agent -- --client ${installClient} (registers Native Messaging for Chrome/Brave/Edge/Chromium, 63 MCP tools, and drishti-browser-agent/SKILL.md — zero auth token or manual bridge needed)
+3. Delete any temporary setup files; if freshly cloned solely for runtime use, remove non-runtime folders (apps/web-showcase, tests) after building.
+4. Tell me to reload extension-ready-to-install/ once in chrome://extensions (or brave://extensions) and confirm it auto-connects.
 </DRISHTI_AUTO_INSTALL>`;
 
   // MCP Tools Explorer state
@@ -1116,15 +1115,15 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
             },
             {
               step: '03',
-              title: 'Zero-Clone AI Setup',
-              desc: 'Run setup:agent to auto-generate .drishti-token, register MCP, and install the drishti-browser-agent skill.',
-              cmd: `pnpm setup:agent -- --client ${installClient}`,
+              title: 'Install Native Host & MCP',
+              desc: 'Register Native Messaging for Chrome, Brave, Edge & Chromium and configure your AI client in one command.',
+              cmd: `pnpm native:install && pnpm setup:agent -- --client ${installClient}`,
             },
             {
               step: '04',
-              title: 'Start Bridge & Ping',
-              desc: 'Run pnpm bridge:start on-demand, paste token (or click Generate) in Extension Settings, and click Run Ping for ONLINE.',
-              cmd: 'pnpm bridge:start',
+              title: 'Reload Extension & Go',
+              desc: 'Reload extension-ready-to-install/ in chrome://extensions or brave://extensions — browser auto-starts the bridge with zero token.',
+              cmd: 'Auto-connected (Native Pipe)',
             },
           ].map(card => (
             <div key={card.step} className="bg-[#0b1222] border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 space-y-3 transition">
@@ -1385,7 +1384,7 @@ Set up Drishti Browser AI (दृष्टि) so you can control my Chrome/Brav
               null,
               { label: 'MCP Server\n(stdio · JSON-RPC)', color: 'border-cyan-500/50 text-cyan-300 bg-cyan-950/40' },
               null,
-              { label: 'Local Bridge\n(ws://127.0.0.1:7483)', color: 'border-emerald-500/50 text-emerald-300 bg-emerald-950/40' },
+              { label: 'Native / Local Bridge\n(\\\\.\\pipe\\drishti-bridge)', color: 'border-emerald-500/50 text-emerald-300 bg-emerald-950/40' },
               null,
               { label: 'Chrome Extension\n(MV3 · Service Worker)', color: 'border-amber-500/50 text-amber-300 bg-amber-950/40' },
               null,

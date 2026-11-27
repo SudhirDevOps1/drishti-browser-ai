@@ -36,6 +36,8 @@ const CORE_TOOL_NAMES = new Set([
   'browser_navigate',
   'browser_observe',
   'browser_snapshot',
+  'browser_screenshot',
+  'browser_print_pdf',
   'browser_evaluate',
   'browser_read',
   'browser_grep',
