@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.4](https://github.com/SudhirDevOps1/drishti-browser-ai/compare/drishti-browser-ai-v0.1.3...drishti-browser-ai-v0.1.4) (2026-11-27)
+
+
+### 🚀 Features & Capabilities
+
+* add native messaging, persistent CDP, bridge power switch, and reliability fixes ([10bf960](https://github.com/SudhirDevOps1/drishti-browser-ai/commit/10bf960a40c353d84f7e66c199c7eb3357ad343a))
+* **mcp:** add browser_evaluate/read/grep, fix auth_fail startup and reliability ([8de4433](https://github.com/SudhirDevOps1/drishti-browser-ai/commit/8de4433c9b81f64288ffcb71ac7769e3189f0ccd))
+
+
+### 🐛 Bug Fixes & Stability
+
+* **mcp:** batch browser_run steps, path screenshots, and click readiness ([1a4ce16](https://github.com/SudhirDevOps1/drishti-browser-ai/commit/1a4ce162e0556ccd5a04b844c4c6dee8f2af87c4))
+
+
+### 🔧 Maintenance & Dependencies
+
+* **release:** sync v0.1.3 SSOT version surfaces and release CI check ([c5df821](https://github.com/SudhirDevOps1/drishti-browser-ai/commit/c5df8216b9c0058b9e4df40de773338c91d7c571))
+
 ## [0.1.3](https://github.com/SudhirDevOps1/drishti-browser-ai/compare/drishti-browser-ai-v0.1.2...drishti-browser-ai-v0.1.3) (2026-11-26)
 
 
