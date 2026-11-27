@@ -244,15 +244,16 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
 5. **MUST print the full 64-character auth token from \`.drishti-token\` clearly in your reply to me** so I can paste it into Extension Settings -> Connection & Bridge -> Save Changes -> Run Ping.
 
-## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
-1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
-2. Call \`browser_observe()\` or \`browser_snapshot()\` to get \`@e1\`, \`@e2\` semantic refs.
-3. Use \`ref: "@eN"\` in \`browser_click\`, \`browser_fill\`, \`browser_type\`, and \`browser_hover\` — do NOT call \`browser_screenshot()\` after every click; use \`browser_observe()\` or post-action DOM summary instead.
-4. Use \`browser_download()\` for silent downloads and \`browser_confirm()\` before any delete/submit/payment action.
+## 3. TOKEN-EFFICIENT EXECUTION (v0.1.3 RELIABILITY PROTOCOL)
+1. **Check Cached Workflows First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` to replay cached SQLite flows.
+2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` into ONE call (compact before/after diffs, 30s budget, auto-caches on success).
+3. **Avoid Redundant Screenshots**: Call \`browser_observe()\` or \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` if lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is enabled.
+4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to debug failures.
 
-## 4. SAFETY RULES
-- Never read or extract values from type="password" fields.
+## 4. SAFETY & KNOWN LIMITS
+- Never read or extract values from type="password" fields; passwords/tokens are redacted from memory.
 - Always ask user confirmation before submitting financial checkouts or payments.
+- Limits: no \`chrome://\` scripting, no built-in PDF text, no cross-origin iframes, viewport-only screenshots, \`browser_batch_compare\` capped at 3 URLs.
 </SYSTEM_INSTRUCTION>`;
 
     navigator.clipboard.writeText(prompt);
@@ -792,15 +793,16 @@ Add this to your MCP settings (Antigravity, Claude ~/.claude/mcp.json, Cursor MC
 4. Remove any temporary setup files; if freshly cloned solely for runtime use, clean up non-runtime folders (\`apps/web-showcase\`, \`tests\`) after building.
 5. **MUST print the full 64-character auth token from \`.drishti-token\` clearly in your reply to me** so I can paste it into Extension Settings -> Connection & Bridge -> Save Changes -> Run Ping.
 
-## 3. TOKEN-EFFICIENT EXECUTION (ZERO REDUNDANT SCREENSHOTS)
-1. Call \`workflow_match({ query })\` or \`browser_task({ goal })\` first to reuse cached SQLite workflows.
-2. Call \`browser_observe()\` or \`browser_snapshot()\` to get \`@e1\`, \`@e2\` semantic refs.
-3. Use \`ref: "@eN"\` in \`browser_click\`, \`browser_fill\`, \`browser_type\`, and \`browser_hover\` — do NOT call \`browser_screenshot()\` after every click; use \`browser_observe()\` or post-action DOM summary instead.
-4. Use \`browser_download()\` for silent downloads and \`browser_confirm()\` before any delete/submit/payment action.
+## 3. TOKEN-EFFICIENT EXECUTION (v0.1.3 RELIABILITY PROTOCOL)
+1. **Check Cached Workflows First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` to replay cached SQLite flows.
+2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` into ONE call (compact before/after diffs, 30s budget, auto-caches on success).
+3. **Avoid Redundant Screenshots**: Call \`browser_observe()\` or \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` if lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is enabled.
+4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to debug failures.
 
-## 4. SAFETY RULES
-- Never read or extract values from type="password" fields.
+## 4. SAFETY & KNOWN LIMITS
+- Never read or extract values from type="password" fields; passwords/tokens are redacted from memory.
 - Always ask user confirmation before submitting financial checkouts or payments.
+- Limits: no \`chrome://\` scripting, no built-in PDF text, no cross-origin iframes, viewport-only screenshots, \`browser_batch_compare\` capped at 3 URLs.
 </SYSTEM_INSTRUCTION>`}
                     </pre>
 

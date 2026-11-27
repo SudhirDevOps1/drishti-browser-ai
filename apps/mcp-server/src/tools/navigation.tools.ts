@@ -45,7 +45,8 @@ const WaitForSchema = z.object({
 export const NAVIGATION_TOOLS = [
   {
     name: 'browser_navigate',
-    description: 'Navigate the specified (or active) tab to a URL. Optionally waits for the page to fully load.',
+    description:
+      'Navigate the specified (or active) tab to a URL and wait for DOM stability. For SPAs or async data loading after navigation, follow up with browser_wait_for({ selector } or { text }).',
     inputSchema: {
       type: 'object' as const,
       properties: {

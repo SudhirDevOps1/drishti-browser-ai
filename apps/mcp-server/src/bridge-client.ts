@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -161,6 +162,13 @@ export class BridgeClient {
       });
 
       ws.on('message', onAuthMessage);
+      ws.once('close', (code, reason) => {
+        clearTimeout(fallbackTimer);
+        this.connected = false;
+        finish();
+        this.scheduleReconnect();
+        console.error(`[BridgeClient] auth closed: ${code} ${reason?.toString() || ''}`);
+      });
       ws.once('error', (err) => {
         clearTimeout(fallbackTimer);
         this.connected = false;
@@ -209,15 +217,44 @@ export class BridgeClient {
     }
   }
 
+  private autoStartAttempted = false;
+
+  private async tryAutoStartBridge(): Promise<void> {
+    if (this.autoStartAttempted) return;
+    if (process.env.DRISHTI_AUTO_START_BRIDGE !== '1' && process.env.DRISHTI_AUTO_START_BRIDGE !== 'true') {
+      return;
+    }
+    this.autoStartAttempted = true;
+    try {
+      const child = spawn('pnpm', ['bridge:start'], {
+        detached: true,
+        stdio: 'ignore',
+        shell: process.platform === 'win32',
+      });
+      child.unref();
+      const deadline = Date.now() + 4000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 400));
+        await this.connect();
+        if (this.isConnected()) return;
+      }
+    } catch {
+      // fall through to actionable error
+    }
+  }
+
   async sendCommand(action: string, payload: unknown): Promise<unknown> {
     if (!this.isConnected()) {
       // Auto-reconnect once on demand before failing
       await this.connect();
+      if (!this.isConnected()) {
+        await this.tryAutoStartBridge();
+      }
     }
 
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       const err = new Error(
-        `BridgeClient: not connected to bridge at ${this.url}. Ensure Local Bridge is running (pnpm bridge:start).`
+        `BridgeClient: not connected to bridge at ${this.url}. Run: pnpm bridge:start (port 7483, ws://127.0.0.1:7483). If already running, verify BRIDGE_AUTH_TOKEN matches .drishti-token.`
       );
       this.emitHook({ action, payload, error: err.message, durationMs: 0 });
       throw err;

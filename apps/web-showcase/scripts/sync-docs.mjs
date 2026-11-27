@@ -22,10 +22,24 @@ if (fs.existsSync(extIconsDir)) {
 
 const rootPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
+// Dynamically count registered MCP tools from source (apps/mcp-server/src/tools/*.ts)
+const toolsSrcDir = path.join(repoRoot, 'apps', 'mcp-server', 'src', 'tools');
+const sourceToolNames = new Set();
+if (fs.existsSync(toolsSrcDir)) {
+  for (const file of fs.readdirSync(toolsSrcDir)) {
+    if (!file.endsWith('.tools.ts')) continue;
+    const src = fs.readFileSync(path.join(toolsSrcDir, file), 'utf8');
+    for (const m of src.matchAll(/name:\s*'([a-z0-9_]+)'/g)) {
+      sourceToolNames.add(m[1]);
+    }
+  }
+}
+const sourceToolCount = sourceToolNames.size || 54;
+
 const docFiles = [
   { id: 'windows-install', title: 'Windows Install Guide', category: 'Setup', file: 'docs/windows-install.md' },
   { id: 'architecture', title: 'System Architecture', category: 'Core', file: 'docs/architecture.md' },
-  { id: 'mcp-tools', title: '46 MCP Tools Reference', category: 'API', file: 'docs/mcp-tools-reference.md' },
+  { id: 'mcp-tools', title: `${sourceToolCount} MCP Tools Reference`, category: 'API', file: 'docs/mcp-tools-reference.md' },
   { id: 'agent-integrations', title: 'Agent Integrations', category: 'Clients', file: 'docs/agent-integrations.md' },
   { id: 'privacy-security', title: 'Privacy & Security', category: 'Security', file: 'docs/privacy-and-security.md' },
   { id: 'security-policy', title: 'Security Policy', category: 'Security', file: 'SECURITY.md' },

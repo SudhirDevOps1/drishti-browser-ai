@@ -257,6 +257,7 @@ export class BridgeServer extends EventEmitter {
 
         if (!validateAuthToken(msg.token, this.authToken)) {
           logger.warn(`Auth failed from ${remoteAddr}: invalid token`);
+          this.safeSend(ws, { type: 'auth_fail', reason: 'invalid token' });
           ws.close(4003, 'Invalid auth token');
           return;
         }

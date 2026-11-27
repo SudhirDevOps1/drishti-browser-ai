@@ -33,7 +33,7 @@
 ## Current Status
 - [x] shared-types package — COMPLETE & COMPILED
 - [x] local-bridge — COMPLETE & TESTED (ws:7483 + auth verified)
-- [x] mcp-server — COMPLETE & COMPILED (35 tools registered)
+- [x] mcp-server — COMPLETE & COMPILED (62 tools registered)
 - [x] chrome-extension — COMPLETE & BUILT (Manifest V3 + React + Tailwind + background SW + content + sidepanel + popup + options)
 - [x] permission-engine — COMPLETE & COMPILED & TESTED
 - [x] workflow-engine — COMPLETE & COMPILED

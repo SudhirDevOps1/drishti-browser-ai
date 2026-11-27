@@ -292,10 +292,43 @@ async function checkDomainPolicy(targetUrl?: string, isNavigation = false): Prom
   }
 }
 
+const tabOwnership = new Map<number, 'mine' | 'user' | 'other-agent'>();
+
+function assertTabWritable(tabId: number | undefined, payload: Record<string, unknown>): void {
+  if (!tabId) return;
+  if (payload.protectUserTabs === true && tabOwnership.get(tabId) !== 'mine' && payload.allowUserTab !== true) {
+    throw new Error(`Refusing to modify user-owned tab #${tabId} without allowUserTab or browser_use_tab lock`);
+  }
+}
+
 function notifyConnectionStatus(connected: boolean): void {
   chrome.runtime.sendMessage({ type: 'CONNECTION_STATUS', connected }).catch(() => {});
   chrome.storage.local.set({ bridgeConnected: connected, bridgeConnectedAt: Date.now() });
+  try {
+    chrome.action.setBadgeText({ text: connected ? 'ON' : 'OFF' }).catch(() => {});
+    chrome.action.setBadgeBackgroundColor({ color: connected ? '#10B981' : '#EF4444' }).catch(() => {});
+  } catch {}
 }
+
+// MV3 Keep-Alive & Lifecycle Reconnect
+try {
+  chrome.alarms?.create('drishti-keepalive', { periodInMinutes: 0.5 });
+  chrome.alarms?.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'drishti-keepalive') {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'ping' }));
+      } else {
+        connectToBridge(false);
+      }
+    }
+  });
+  chrome.runtime.onStartup?.addListener(() => {
+    connectToBridge(false);
+  });
+  chrome.runtime.onInstalled?.addListener(() => {
+    connectToBridge(false);
+  });
+} catch {}
 
 function broadcastAction(
   action: string,
@@ -327,7 +360,13 @@ async function resolveDefaultTabId(explicitTabId?: number): Promise<number | und
     }
   }
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  return activeTabs[0]?.id;
+  const active = activeTabs[0];
+  if (active?.id && active.url && !/^(chrome|brave|chrome-extension|edge):/i.test(active.url)) {
+    return active.id;
+  }
+  const allTabs = await chrome.tabs.query({ currentWindow: true });
+  const httpTab = allTabs.find((t) => t.id && t.url && /^https?:/i.test(t.url));
+  return httpTab?.id ?? active?.id;
 }
 
 // --- Command Handler ---
@@ -408,6 +447,9 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'GET_DOM_SNAPSHOT':  result = await getDomSnapshot(payload); break;
       case 'INSPECT':           result = await inspectElement(payload); break;
       case 'GET_TEXT':          result = await getPageText(payload); break;
+      case 'EVALUATE':          result = await evaluateInPage(payload); break;
+      case 'READ_PAGE':         result = await readPage(payload); break;
+      case 'GREP_PAGE':         result = await grepPage(payload); break;
       case 'GET_LINKS':         result = await getPageLinks(payload); break;
       case 'FIND_ELEMENT':      result = await findPageElement(payload); break;
       case 'GET_TABLES':        result = await getPageTables(payload); break;
@@ -430,6 +472,13 @@ async function handleCommand(action: string, payload: Record<string, unknown>): 
       case 'GET_CONSOLE_LOGS':  result = await getConsoleLogs(payload); break;
       case 'BATCH_COMPARE':     result = await batchCompare(payload); break;
       case 'GET_LEARNING_STATS': result = await getLearningStats(); break;
+      case 'GROUP_TABS':        result = await groupTabs(payload); break;
+      case 'EXECUTE_WORKFLOW':  result = await executeWorkflow(payload); break;
+      case 'VERIFY_ACTION':     result = await verifyAction(payload); break;
+      case 'TASK_STATUS':       result = await getTaskStatus(payload); break;
+      case 'STOP_TASK':         result = await stopTask(payload); break;
+      case 'GET_NETWORK_LOGS':  result = await getNetworkLogs(payload); break;
+      case 'REQUEST_HUMAN_HELP': result = await requestHumanHelp(payload); break;
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -552,6 +601,7 @@ async function getTabs(): Promise<unknown> {
     windowId: t.windowId,
     index: t.index,
     status: t.status,
+    ownership: (t.id && tabOwnership.get(t.id)) || 'user',
   }));
 }
 
@@ -565,6 +615,7 @@ async function navigate(payload: Record<string, unknown>): Promise<unknown> {
   if (!url) throw new Error('url is required');
 
   const tabId = payload.tabId as number | undefined;
+  assertTabWritable(tabId, payload);
 
   if (tabId) {
     await chrome.tabs.update(tabId, { url });
@@ -609,7 +660,7 @@ async function navigate(payload: Record<string, unknown>): Promise<unknown> {
 }
 
 async function waitForTabLoad(tabId?: number): Promise<void> {
-  return new Promise((resolve) => {
+  await new Promise<void>((resolve) => {
     let settled = false;
     const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
       if ((!tabId || id === tabId) && info.status === 'complete' && !settled) {
@@ -628,11 +679,44 @@ async function waitForTabLoad(tabId?: number): Promise<void> {
     }, 15000);
     chrome.tabs.onUpdated.addListener(listener);
   });
+
+  if (!tabId) return;
+  // Wait briefly for DOM stability (250ms quiet window, bounded at 2.5s)
+  await chrome.scripting
+    .executeScript({
+      target: { tabId },
+      func: () =>
+        new Promise<void>((resolve) => {
+          let lastMutation = performance.now();
+          const start = performance.now();
+          const observer = new MutationObserver(() => {
+            lastMutation = performance.now();
+          });
+          if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+          }
+          const check = () => {
+            const now = performance.now();
+            if (
+              (document.readyState === 'complete' && now - lastMutation >= 250) ||
+              now - start >= 2500
+            ) {
+              observer.disconnect();
+              resolve();
+              return;
+            }
+            setTimeout(check, 60);
+          };
+          setTimeout(check, 80);
+        }),
+    })
+    .catch(() => {});
 }
 
 async function newTab(payload: Record<string, unknown>): Promise<unknown> {
   const tab = await chrome.tabs.create({ url: (payload.url as string) || 'about:blank' });
-  return { id: tab.id, url: tab.url, title: tab.title };
+  if (tab.id) tabOwnership.set(tab.id, 'mine');
+  return { id: tab.id, url: tab.url, title: tab.title, ownership: 'mine' };
 }
 
 async function closeTab(payload: Record<string, unknown>): Promise<unknown> {
@@ -661,6 +745,7 @@ async function goBack(payload: Record<string, unknown>): Promise<unknown> {
   const tabId = payload.tabId as number | undefined;
   const target = tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
   await chrome.tabs.goBack(target);
   return { success: true };
 }
@@ -669,6 +754,7 @@ async function goForward(payload: Record<string, unknown>): Promise<unknown> {
   const tabId = payload.tabId as number | undefined;
   const target = tabId || (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
   await chrome.tabs.goForward(target);
   return { success: true };
 }
@@ -817,10 +903,13 @@ async function getDomSnapshot(payload: Record<string, unknown>): Promise<unknown
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
+  const includeHtml = Boolean(payload.includeHtml);
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: extractDomSnapshot,
+    args: [includeHtml],
   });
 
   return results[0]?.result;
@@ -845,11 +934,24 @@ export interface ElementSnapshot {
 }
 
 // This function runs in the page context
-function extractDomSnapshot() {
+function extractDomSnapshot(includeHtml = false) {
   const elements: ElementSnapshot[] = [];
-  const interactive = document.querySelectorAll(
-    'a, button, input, select, textarea, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [tabindex]'
-  );
+  const INTERACTIVE_SELECTOR =
+    'a, button, input, select, textarea, [contenteditable="true"], [role="button"], [role="link"], [role="textbox"], [role="checkbox"], [role="radio"], [role="tab"], [role="switch"], [role="menuitem"], [onclick], [tabindex]';
+  const collected: Element[] = [];
+  const collectInteractive = (root: ParentNode, depth = 0) => {
+    if (depth > 4 || collected.length >= 250) return;
+    root.querySelectorAll(INTERACTIVE_SELECTOR).forEach((el) => {
+      if (collected.length < 250) collected.push(el);
+    });
+    root.querySelectorAll('*').forEach((host) => {
+      if (host.shadowRoot && collected.length < 250) {
+        collectInteractive(host.shadowRoot, depth + 1);
+      }
+    });
+  };
+  collectInteractive(document);
+  const interactive = collected;
 
   let refIndex = 0;
   interactive.forEach((el) => {
@@ -916,6 +1018,7 @@ function extractDomSnapshot() {
       .querySelector('meta[name="description"]')
       ?.getAttribute('content'),
     language: document.documentElement.lang,
+    ...(includeHtml ? { html: document.documentElement.outerHTML.slice(0, 50000) } : {}),
   };
 }
 
@@ -984,8 +1087,11 @@ async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick 
   const hasPerm = await chrome.permissions.contains({ permissions: ['debugger'] }).catch(() => false);
   if (!hasPerm) return false;
 
-  try {
+  let attached = false;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+  const runCdp = (async () => {
     await chrome.debugger.attach({ tabId }, '1.3');
+    attached = true;
     await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x,
@@ -1010,10 +1116,22 @@ async function trustedCdpClick(tabId: number, x: number, y: number, doubleClick 
       });
     }
     return true;
+  })().finally(() => {
+    if (attached) {
+      attached = false;
+      void chrome.debugger.detach({ tabId }).catch(() => {});
+    }
+  });
+
+  try {
+    const cdpTimeout = new Promise<boolean>((resolve) => {
+      timerId = setTimeout(() => resolve(false), 2500);
+    });
+    return await Promise.race([runCdp, cdpTimeout]);
   } catch {
     return false;
   } finally {
-    await chrome.debugger.detach({ tabId }).catch(() => {});
+    if (timerId !== null) clearTimeout(timerId);
   }
 }
 
@@ -1025,6 +1143,7 @@ async function hoverElement(payload: Record<string, unknown>): Promise<ActionRes
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   await yieldIfHumanActive();
 
@@ -1196,6 +1315,7 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   let hostname = '';
   try {
@@ -1258,14 +1378,15 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     })
     .catch(() => {});
 
-  const locateRes = await chrome.scripting.executeScript({
-    target: { tabId: target },
-    func: async (
-      selector: string | null,
-      x: number | null,
-      y: number | null,
-      learnedSelector: string | null
-    ) => {
+  const runLocate = () =>
+    chrome.scripting.executeScript({
+      target: { tabId: target },
+      func: async (
+        selector: string | null,
+        x: number | null,
+        y: number | null,
+        learnedSelector: string | null
+      ) => {
       async function waitScrollSettle(element: HTMLElement) {
         const r0 = element.getBoundingClientRect();
         if (r0.top >= 24 && r0.bottom <= window.innerHeight - 24) return;
@@ -1444,6 +1565,20 @@ async function clickElement(payload: Record<string, unknown>): Promise<unknown> 
     ],
   });
 
+  let locateRes;
+  try {
+    locateRes = await runLocate();
+  } catch (firstErr) {
+    const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+    if (/element not found/i.test(msg) && resolvedInputSelector) {
+      broadcastAction('Selector stale — retrying with fresh snapshot', 'RETRY', 'pending');
+      await getDomSnapshot({ tabId: target }).catch(() => {});
+      locateRes = await runLocate();
+    } else {
+      throw firstErr;
+    }
+  }
+
   const clickStartedAt = Date.now();
   const isDoubleClick = Boolean(payload.doubleClick);
   const prep = locateRes[0]?.result as {
@@ -1533,6 +1668,7 @@ async function typeText(payload: Record<string, unknown>): Promise<unknown> {
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   await yieldIfHumanActive();
 
@@ -1831,6 +1967,7 @@ async function scrollPage(payload: Record<string, unknown>): Promise<ActionResul
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   const direction = (payload.direction as string) || 'down';
   const amount = (payload.amount as number) || 300;
@@ -1880,6 +2017,7 @@ async function pressKey(payload: Record<string, unknown>): Promise<ActionResult>
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   const keyName = String(payload.key || 'Enter');
   const modifiers = (payload.modifiers as string[]) || [];
@@ -1932,37 +2070,47 @@ async function pressKey(payload: Record<string, unknown>): Promise<ActionResult>
     await dispatchShadowCursor(target, 'key', activeCoords.x, activeCoords.y, keyLabel, activeCoords.rect, keyLabel);
   }
 
+  const normMods = modifiers.map((m) => m.toLowerCase());
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
     func: (key: string, mods: string[]) => {
       const keyCodeMap: Record<string, number> = { Enter: 13, Escape: 27, Tab: 9, Backspace: 8, Space: 32 };
-      const codeVal = keyCodeMap[key] || 0;
+      const codeVal = keyCodeMap[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
+      const ctrlKey = mods.includes('ctrl') || mods.includes('control');
+      const shiftKey = mods.includes('shift');
+      const altKey = mods.includes('alt');
+      const metaKey = mods.includes('meta');
       const eventInit: KeyboardEventInit = {
         key,
-        code: key === ' ' ? 'Space' : key,
+        code: key === ' ' ? 'Space' : key.length === 1 ? `Key${key.toUpperCase()}` : key,
         keyCode: codeVal,
         which: codeVal,
         bubbles: true,
-        ctrlKey: mods.includes('ctrl'),
-        shiftKey: mods.includes('shift'),
-        altKey: mods.includes('alt'),
-        metaKey: mods.includes('meta'),
+        cancelable: true,
+        ctrlKey,
+        shiftKey,
+        altKey,
+        metaKey,
       };
-      document.activeElement?.dispatchEvent(
-        new KeyboardEvent('keydown', eventInit)
-      );
-      document.activeElement?.dispatchEvent(
-        new KeyboardEvent('keyup', eventInit)
-      );
+      const activeEl = document.activeElement as HTMLElement | null;
+      activeEl?.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+      if (ctrlKey && key.toLowerCase() === 'a') {
+        if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) {
+          activeEl.select();
+        } else {
+          document.execCommand?.('selectAll');
+        }
+      }
+      activeEl?.dispatchEvent(new KeyboardEvent('keyup', eventInit));
 
-      if (key === 'Enter') {
-        const form = (document.activeElement as HTMLElement)?.closest('form');
+      if (key === 'Enter' && !shiftKey) {
+        const form = activeEl?.closest('form');
         if (form) form.requestSubmit();
       }
 
-      return { pressed: key };
+      return { pressed: key, modifiers: mods };
     },
-    args: [keyName, modifiers],
+    args: [keyName, normMods],
   });
 
   return {
@@ -1991,6 +2139,7 @@ async function getPageInfo(payload: Record<string, unknown>): Promise<unknown> {
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: target },
@@ -2030,10 +2179,12 @@ async function getPageInfo(payload: Record<string, unknown>): Promise<unknown> {
 let lastHumanActivityAt = 0;
 
 async function yieldIfHumanActive(): Promise<void> {
+  const { cursorSpeed } = await chrome.storage.local.get('cursorSpeed');
+  if (cursorSpeed === 'fast') return;
   const since = Date.now() - lastHumanActivityAt;
-  if (lastHumanActivityAt > 0 && since < 3000) {
+  if (lastHumanActivityAt > 0 && since < 2000) {
     broadcastAction('Human takeover detected — AI yielding briefly', 'TAKEOVER', 'pending');
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 400));
   }
 }
 
@@ -2162,10 +2313,146 @@ async function attachDevTelemetry(tabId?: number): Promise<{ attached: boolean; 
   return { attached: true, tabId: target };
 }
 
-async function getConsoleLogs(_payload: Record<string, unknown>): Promise<unknown> {
-  // Console logs are captured by content script and stored in extension storage
+async function getConsoleLogs(payload: Record<string, unknown>): Promise<unknown> {
   const result = await chrome.storage.session.get(['consoleLogs']);
-  return result.consoleLogs || [];
+  let logs: Array<{ level?: string; tabId?: number }> = Array.isArray(result.consoleLogs) ? result.consoleLogs : [];
+  if (payload.tabId) {
+    logs = logs.filter((l) => l.tabId === payload.tabId);
+  }
+  const levels = payload.levels as string[] | undefined;
+  if (levels?.length) {
+    const allowed = new Set(levels.map((lv) => lv.toLowerCase()));
+    logs = logs.filter((l) => allowed.has((l.level || 'log').toLowerCase()));
+  }
+  return logs;
+}
+
+let currentTaskId: string | null = null;
+let currentTaskStatus: 'idle' | 'running' | 'completed' | 'failed' | 'paused' = 'idle';
+let currentTaskSteps: string[] = [];
+
+async function groupTabs(payload: Record<string, unknown>): Promise<unknown> {
+  const tabIds = payload.tabIds as number[] | undefined;
+  if (!tabIds?.length) throw new Error('tabIds is required');
+  const groupId = await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]] });
+  if (payload.groupName && chrome.tabGroups?.update) {
+    await chrome.tabGroups.update(groupId, { title: String(payload.groupName) });
+  }
+  return { groupId, tabIds, groupName: payload.groupName ?? null };
+}
+
+async function executeWorkflow(payload: Record<string, unknown>): Promise<unknown> {
+  const steps = payload.steps as Array<{ tool: string; params?: Record<string, unknown> }> | undefined;
+  if (!steps?.length) throw new Error('steps array is required');
+  currentTaskId = `wf-${Date.now()}`;
+  currentTaskStatus = 'running';
+  currentTaskSteps = [];
+  taskAborted = false;
+
+  const results: Array<{ step: number; tool: string; ok: boolean; result?: unknown; error?: string }> = [];
+  for (let i = 0; i < steps.length; i++) {
+    if (taskAborted) {
+      currentTaskStatus = 'failed';
+      break;
+    }
+    const step = steps[i];
+    const action = step.tool.replace(/^browser_/, '').toUpperCase();
+    const params = payload.tabId ? { ...(step.params ?? {}), tabId: payload.tabId } : (step.params ?? {});
+    try {
+      const r = await handleCommand(action, params);
+      currentTaskSteps.push(`${step.tool}:ok`);
+      results.push({ step: i + 1, tool: step.tool, ok: true, result: r });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      currentTaskSteps.push(`${step.tool}:error`);
+      results.push({ step: i + 1, tool: step.tool, ok: false, error: msg });
+      currentTaskStatus = 'failed';
+      return { taskId: currentTaskId, completed: i, ok: false, results };
+    }
+  }
+  currentTaskStatus = 'completed';
+  return { taskId: currentTaskId, completed: results.length, ok: true, results };
+}
+
+async function verifyAction(payload: Record<string, unknown>): Promise<unknown> {
+  const tabId = payload.tabId as number | undefined;
+  const target =
+    tabId ||
+    (await resolveDefaultTabId()) ||
+    (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
+
+  const description = String(payload.description || '').trim();
+  const snap = (await getDomSnapshot({ tabId: target })) as {
+    url?: string;
+    title?: string;
+    elements?: Array<{ text?: string; value?: string; tag?: string }>;
+  };
+  const pageText = String(await getPageText({ tabId: target }).then((r: unknown) => (r as { text?: string })?.text || '').catch(() => ''));
+  const keywords = description
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 3);
+  const haystack = `${snap?.title || ''} ${snap?.url || ''} ${pageText}`.toLowerCase();
+  const matchedKeywords = keywords.filter((k) => haystack.includes(k));
+  const verified = Boolean(snap?.url) && (keywords.length === 0 || matchedKeywords.length > 0 || (snap?.elements?.length ?? 0) > 0);
+  const screenshot = payload.screenshot ? await takeScreenshot({ tabId: target }) : undefined;
+
+  return {
+    verified,
+    description,
+    evidence: {
+      url: snap?.url,
+      title: snap?.title,
+      elementCount: snap?.elements?.length ?? 0,
+      matchedKeywords,
+      textPreview: pageText.slice(0, 300),
+    },
+    ...(screenshot ? { screenshot } : {}),
+    timestamp: Date.now(),
+  };
+}
+
+async function getTaskStatus(payload: Record<string, unknown>): Promise<unknown> {
+  return {
+    taskId: payload.taskId || currentTaskId || 'none',
+    status: currentTaskStatus,
+    steps: currentTaskSteps,
+    aborted: taskAborted,
+  };
+}
+
+async function stopTask(payload: Record<string, unknown>): Promise<unknown> {
+  taskAborted = true;
+  currentTaskStatus = 'failed';
+  broadcastAction('Task stopped by MCP command', 'STOP_TASK', 'error');
+  return { stopped: true, taskId: payload.taskId || currentTaskId || null };
+}
+
+async function getNetworkLogs(payload: Record<string, unknown>): Promise<unknown> {
+  const result = await chrome.storage.session.get(['networkErrors', 'networkLogs']);
+  let all: Array<{ tabId?: number; url?: string }> = [
+    ...(Array.isArray(result.networkErrors) ? result.networkErrors : []),
+    ...(Array.isArray(result.networkLogs) ? result.networkLogs : []),
+  ];
+  if (payload.tabId) {
+    all = all.filter((e) => e.tabId === payload.tabId);
+  }
+  if (payload.filter) {
+    const f = String(payload.filter);
+    all = all.filter((e) => String(e.url || '').includes(f));
+  }
+  return all.slice(-200);
+}
+
+async function requestHumanHelp(payload: Record<string, unknown>): Promise<unknown> {
+  const kind = String(payload.kind || 'manual_step');
+  const reason = String(payload.reason || 'Human assistance requested');
+  taskAborted = true;
+  currentTaskStatus = 'paused';
+  broadcastAction(`Human Help Needed (${kind}): ${reason}`, 'HUMAN_HELP', 'pending');
+  return { paused: true, kind, reason, timestamp: Date.now() };
 }
 
 async function getDevTelemetry(tabId?: number): Promise<{ consoleLogs: unknown[]; networkErrors: unknown[] }> {
@@ -2485,6 +2772,7 @@ async function resolveTargetTab(payload: Record<string, unknown>): Promise<numbe
     (await resolveDefaultTabId()) ||
     (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
   if (!target) throw new Error('No active tab');
+  assertTabWritable(target, payload);
   return target;
 }
 
@@ -2541,6 +2829,136 @@ async function getPageText(payload: Record<string, unknown>): Promise<unknown> {
       };
     },
     args: [(payload.selector as string) || null],
+  });
+  return results[0]?.result;
+}
+
+async function evaluateInPage(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const fnRaw = String(payload.fn || '').trim();
+  if (!fnRaw) throw new Error('fn is required for EVALUATE');
+  const timeoutMs = Math.min(Math.max(Number(payload.timeout ?? 5000), 100), 15000);
+  const argJson = payload.arg !== undefined ? JSON.stringify(payload.arg) : 'undefined';
+
+  // Build self-invoking expression executed via CDP Runtime.evaluate in MAIN world (zero eval/new Function in MV3)
+  const expr = `(() => {
+    const __arg = ${argJson};
+    const __fn = (${fnRaw});
+    return typeof __fn === 'function' ? __fn(__arg) : __fn;
+  })()`;
+
+  let attached = false;
+  try {
+    await chrome.debugger.attach({ tabId: target }, '1.3');
+    attached = true;
+    const preUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+    const cdpRes = (await chrome.debugger.sendCommand({ tabId: target }, 'Runtime.evaluate', {
+      expression: expr,
+      returnByValue: true,
+      awaitPromise: true,
+      timeout: timeoutMs,
+    })) as { result?: { value?: unknown; description?: string }; exceptionDetails?: { text?: string; exception?: { description?: string } } };
+
+    if (cdpRes?.exceptionDetails) {
+      const errText =
+        cdpRes.exceptionDetails.exception?.description ||
+        cdpRes.exceptionDetails.text ||
+        'Evaluation threw an exception';
+      throw new Error(errText);
+    }
+    const postUrl = (await chrome.tabs.get(target).catch(() => null))?.url || '';
+    return {
+      changed: postUrl !== preUrl,
+      value: cdpRes?.result?.value ?? null,
+    };
+  } finally {
+    if (attached) {
+      await chrome.debugger.detach({ tabId: target }).catch(() => {});
+    }
+  }
+}
+
+async function readPage(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const nonce = Math.random().toString(36).slice(2, 10);
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (selector: string | null) => {
+      const root = (selector ? document.querySelector(selector) : document.body) as HTMLElement | null;
+      if (!root) throw new Error(`Element not found: ${selector}`);
+      const lines: string[] = [];
+      if (document.title) lines.push(`# ${document.title}`, '');
+      const blocks = root.querySelectorAll('h1,h2,h3,h4,p,li,tr');
+      blocks.forEach((el) => {
+        const tag = el.tagName.toLowerCase();
+        const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!txt) return;
+        if (tag === 'h1') lines.push(`# ${txt}`);
+        else if (tag === 'h2') lines.push(`## ${txt}`);
+        else if (tag === 'h3') lines.push(`### ${txt}`);
+        else if (tag === 'h4') lines.push(`#### ${txt}`);
+        else if (tag === 'li') lines.push(`- ${txt}`);
+        else lines.push(txt);
+      });
+      const md = (lines.length > 2 ? lines.join('\n') : (root.innerText || '').trim()).slice(0, 16000);
+      return {
+        url: window.location.href,
+        origin: window.location.origin,
+        title: document.title,
+        markdown: md,
+      };
+    },
+    args: [(payload.selector as string) || null],
+  });
+
+  const res = results[0]?.result as { url: string; origin: string; title: string; markdown: string } | undefined;
+  const origin = res?.origin || 'unknown';
+  const wrapped = `[UNTRUSTED_PAGE_CONTENT nonce=${nonce} origin=${origin}]\n${res?.markdown || ''}\n[END_UNTRUSTED_PAGE_CONTENT]`;
+  return {
+    url: res?.url,
+    origin,
+    title: res?.title,
+    nonce,
+    content: wrapped,
+  };
+}
+
+async function grepPage(payload: Record<string, unknown>): Promise<unknown> {
+  const target = await resolveTargetTab(payload);
+  const pattern = String(payload.pattern || '');
+  if (!pattern) throw new Error('pattern is required for GREP_PAGE');
+  const limit = Math.min(Math.max(Number(payload.limit ?? 50), 1), 200);
+  const over = payload.over === 'html' ? 'html' : 'text';
+
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: target },
+    func: (pat: string, maxLines: number, mode: string) => {
+      const source = mode === 'html' ? document.documentElement.outerHTML : (document.body?.innerText || '');
+      let re: RegExp;
+      try {
+        re = new RegExp(pat, 'i');
+      } catch {
+        re = new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      }
+      const matches: Array<{ lineNumber: number; text: string }> = [];
+      const lines = source.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (re.test(line)) {
+          matches.push({ lineNumber: i + 1, text: line.slice(0, 300) });
+          if (matches.length >= maxLines) break;
+        }
+      }
+      return {
+        url: window.location.href,
+        pattern: pat,
+        over: mode,
+        matchCount: matches.length,
+        matches,
+      };
+    },
+    args: [pattern, limit, over],
   });
   return results[0]?.result;
 }
@@ -2877,9 +3295,10 @@ async function useTab(payload: Record<string, unknown>): Promise<unknown> {
   const tabId = (payload.tabId as number | null | undefined) ?? null;
   await chrome.storage.local.set({ lockedTabId: tabId });
   if (tabId) {
+    tabOwnership.set(tabId, 'mine');
     await chrome.tabs.update(tabId, { active: true }).catch(() => {});
   }
-  return { lockedTabId: tabId, unlocked: tabId === null };
+  return { lockedTabId: tabId, unlocked: tabId === null, ownership: tabId ? 'mine' : null };
 }
 
 async function downloadMedia(payload: Record<string, unknown>): Promise<unknown> {

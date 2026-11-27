@@ -85,7 +85,7 @@ node scripts/version.mjs bump patch
 
 - **WebSocket Bridge URL:** `ws://127.0.0.1:7483`
 - **Active Auth Token:** `YOUR_64_CHARACTER_BRIDGE_TOKEN`
-- **Total Registered Tools:** 46 MCP Tools
+- **Total Registered Tools:** 62 MCP Tools
 
 ---
 

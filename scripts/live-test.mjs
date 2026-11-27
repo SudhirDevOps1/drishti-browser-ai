@@ -11,12 +11,13 @@ const rootDir = path.resolve(__dirname, '..');
 
 // 1. Resolve Token
 let authToken = process.env.BRIDGE_AUTH_TOKEN || '';
-const tokenFile = path.join(rootDir, 'apps', 'local-bridge', '.active-token.txt');
+const tokenFile = path.join(rootDir, '.drishti-token');
 if (!authToken && fs.existsSync(tokenFile)) {
   authToken = fs.readFileSync(tokenFile, 'utf8').trim();
 }
-if (!authToken) {
-  authToken = 'YOUR_64_CHARACTER_BRIDGE_TOKEN';
+if (!authToken || /^(.)\1{63}$/.test(authToken) || !/^[a-f0-9]{64}$/i.test(authToken)) {
+  console.error('ERROR: Valid 64-hex BRIDGE_AUTH_TOKEN or .drishti-token is required.');
+  process.exit(1);
 }
 
 const WS_PORT = process.env.BRIDGE_WS_PORT || 7483;
@@ -70,13 +71,14 @@ async function runLiveTest() {
   const shotStart = Date.now();
   const screenshot = await executeCommand(ws, 'SCREENSHOT', { format: 'png' });
   const shotLatency = Date.now() - shotStart;
-  if (screenshot?.dataUrl) {
-    const base64Data = screenshot.dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const rawImg = screenshot?.base64 || screenshot?.dataUrl;
+  if (rawImg) {
+    const base64Data = String(rawImg).replace(/^data:image\/\w+;base64,/, '');
     const outPath = path.join(rootDir, 'docs', 'assets', 'live-test-screenshot.png');
     fs.writeFileSync(outPath, Buffer.from(base64Data, 'base64'));
     console.log(`[4/4] Live Viewport Screenshot Capture .... ✅ OK (Saved docs/assets/live-test-screenshot.png, ${shotLatency}ms)`);
   } else {
-    console.log(`[4/4] Live Viewport Screenshot Capture .... ✅ OK (${shotLatency}ms)`);
+    throw new Error('Screenshot returned empty payload (expected base64)');
   }
 
   console.log('\n' + '='.repeat(68));

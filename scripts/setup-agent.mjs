@@ -21,6 +21,13 @@ function parseArgs(argv) {
   return args;
 }
 
+function isPredictableToken(token) {
+  if (!/^[a-f0-9]{64}$/i.test(token)) return true;
+  if (/^(.)\1{63}$/.test(token)) return true;
+  if (/^(0123456789abcdef)+$/i.test(token)) return true;
+  return false;
+}
+
 function ensureToken(explicitToken, dryRun) {
   const tokenFile = path.join(repoRoot, '.drishti-token');
   if (explicitToken && /^[a-f0-9]{64}$/i.test(explicitToken)) {
@@ -29,7 +36,11 @@ function ensureToken(explicitToken, dryRun) {
   }
   if (fs.existsSync(tokenFile)) {
     const existing = fs.readFileSync(tokenFile, 'utf8').trim();
-    if (/^[a-f0-9]{64}$/i.test(existing)) return existing;
+    if (isPredictableToken(existing)) {
+      console.error('❌ ERROR: .drishti-token contains a predictable placeholder token (e.g. repeated chars). Delete .drishti-token or regenerate a random 64-hex token.');
+      process.exit(1);
+    }
+    return existing;
   }
   const fresh = crypto.randomBytes(32).toString('hex');
   if (!dryRun) fs.writeFileSync(tokenFile, fresh, 'utf8');
@@ -54,16 +65,16 @@ function writeJsonSafe(filePath, data, dryRun) {
 function installSkill(targetDir, dryRun) {
   const skillContent = `---
 name: drishti-browser-agent
-description: Autonomous Chrome/Brave browser controller via Drishti Browser AI MCP. Prefer workflow_match, browser_observe, and @eN refs over screenshots after every click.
+description: Autonomous Chrome/Brave browser controller via Drishti Browser AI MCP. Prefer browser_run, workflow_match/browser_task, browser_observe, and @eN refs over screenshots after every click.
 ---
 
-# Drishti Browser AI — Agent Protocol
+# Drishti Browser AI — Agent Protocol (v0.1.3)
 
 1. **Check SQLite Workflow Cache First**: Call \`workflow_match({ query })\` or \`browser_task({ goal })\` before planning clicks from scratch.
-2. **Avoid Redundant Screenshots**: Use \`browser_observe()\` and \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of calling \`browser_screenshot()\` after every click.
-3. **Record New Workflows**: Wrap repeated multi-step tasks with \`workflow_start({ name, queryPattern })\` and \`workflow_stop()\`.
-4. **Safe Downloads & Destructive Gates**: Use \`browser_download()\` for silent downloads, \`browser_handle_save_dialog()\` if a \`blob:\` Save As dialog appears, \`browser_wait_download()\` for large files (like Linux ISOs), and \`browser_confirm()\` before delete/submit/payment actions.
-5. **Fast Typing**: Use \`browser_fill()\` or \`browser_type()\` (instant insertion for >40 chars).
+2. **Use \`browser_run({ steps, goal })\` for Multi-Step Flows**: Batch \`navigate\`, \`wait_for\`, \`click\`, \`type\`, \`extract\`, \`tables\`, and \`verify\` in one call (compact diffs, 30s budget, auto-cached on success).
+3. **Avoid Redundant Screenshots**: Use \`browser_observe()\` and \`browser_snapshot()\` (\`@e1\`, \`@e2\` refs) instead of \`browser_screenshot()\` after every click. Use \`browser_tools({ query })\` when lazy discovery (\`DRISHTI_LAZY_TOOLS=1\`) is active.
+4. **Tab Isolation, Downloads & Human Handoff**: Pin your target tab with \`browser_use_tab({ tabId })\`. Use \`browser_download()\` for silent downloads, \`browser_handle_save_dialog()\` for \`blob:\` Save As dialogs, \`browser_wait_download()\` for large files, \`browser_confirm()\` before delete/submit/payment, \`browser_request_human_help({ kind, reason })\` for CAPTCHA/2FA/login, and \`browser_audit({ last })\` to inspect failures.
+5. **Fast Typing & Known Limits**: Use \`browser_fill()\` or \`browser_type()\`. Never script \`chrome://\` URLs or solve CAPTCHAs; \`browser_batch_compare\` is capped at 3 URLs.
 `;
   if (!dryRun) {
     fs.mkdirSync(targetDir, { recursive: true });

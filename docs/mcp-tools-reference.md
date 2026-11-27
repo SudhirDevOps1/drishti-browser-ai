@@ -1,6 +1,6 @@
 # MCP Tools Reference — Drishti Browser AI
 
-Drishti Browser AI registers **46 official browser automation tools** with the Model Context Protocol (MCP). Every tool includes validated JSON Schemas, strict parameter typing, and structured outputs.
+Drishti Browser AI registers **62 official browser automation tools** with the Model Context Protocol (MCP). Every tool includes validated JSON Schemas, strict parameter typing, and structured outputs.
 
 ---
 

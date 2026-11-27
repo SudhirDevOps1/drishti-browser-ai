@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BridgeClient } from '../bridge-client.js';
+import { readAuditLog } from '../audit-logger.js';
 import { ToolResponse } from './browser.tools.js';
 
 function ok(result: unknown): ToolResponse {
@@ -23,6 +24,10 @@ const GetErrorsSchema = z.object({
 const NetworkInspectSchema = z.object({
   tabId: z.number().int().optional().describe('Target tab ID. Defaults to active tab.'),
   filter: z.string().optional().describe('Optional URL substring or regex string to filter requests.'),
+});
+
+const AuditSchema = z.object({
+  last: z.number().int().min(1).max(500).optional().describe('Number of recent entries to return (default 50, max 500).'),
 });
 
 // ─── Tool definitions ────────────────────────────────────────────────────────
@@ -70,6 +75,18 @@ export const DEBUGGING_TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'browser_audit',
+    description:
+      'Read the local JSONL audit log of MCP tool calls: timestamp, tool, tabId, outcome, durationMs, and error.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        last: { type: 'number', description: 'Recent entries to return (default 50, max 500).' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -87,6 +104,11 @@ export async function handleDebuggingTool(name: string, args: unknown, bridge: B
     case 'browser_network_inspect': {
       const params = NetworkInspectSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('GET_NETWORK_LOGS', params));
+    }
+    case 'browser_audit': {
+      const params = AuditSchema.parse(args ?? {});
+      const entries = readAuditLog(params.last ?? 50);
+      return ok({ count: entries.length, entries });
     }
     default:
       return undefined;

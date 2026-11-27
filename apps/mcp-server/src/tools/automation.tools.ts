@@ -63,6 +63,11 @@ const HandleSaveDialogSchema = z.object({
   timeoutMs: z.number().int().min(1000).max(30000).optional().describe('Wait timeout in ms (default 8000).'),
 });
 
+const RequestHumanHelpSchema = z.object({
+  kind: z.enum(['captcha', '2fa', 'login', 'payment', 'manual_step']).describe('Kind of human intervention needed.'),
+  reason: z.string().min(3).describe('Clear explanation of what the user should complete before resuming.'),
+});
+
 // ─── Tool definitions ────────────────────────────────────────────────────────
 
 export const AUTOMATION_TOOLS = [
@@ -212,6 +217,23 @@ export const AUTOMATION_TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'browser_request_human_help',
+    description:
+      'Pause automation and surface a clear prompt to the user when human intervention is required (e.g. CAPTCHA, 2FA, login, or payment).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['captcha', '2fa', 'login', 'payment', 'manual_step'],
+          description: 'Category of human assistance needed.',
+        },
+        reason: { type: 'string', description: 'What the user should do.' },
+      },
+      required: ['kind', 'reason'],
+    },
+  },
 ];
 
 // ─── Registration ────────────────────────────────────────────────────────────
@@ -256,6 +278,10 @@ export async function handleAutomationTool(name: string, args: unknown, bridge: 
     case 'browser_handle_save_dialog': {
       const params = HandleSaveDialogSchema.parse(args ?? {});
       return ok(await bridge.sendCommand('OS_SAVE_DIALOG', params));
+    }
+    case 'browser_request_human_help': {
+      const params = RequestHumanHelpSchema.parse(args ?? {});
+      return ok(await bridge.sendCommand('REQUEST_HUMAN_HELP', params));
     }
     default:
       return undefined;

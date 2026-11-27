@@ -12,9 +12,9 @@ function readRootVersion(): string {
     const dir = path.dirname(fileURLToPath(import.meta.url));
     const rootPkgPath = path.resolve(dir, '../../../package.json');
     const pkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8')) as { version?: string };
-    return pkg.version || '0.1.1';
+    return pkg.version || '0.1.3';
   } catch {
-    return '0.1.1';
+    return '0.1.3';
   }
 }
 
@@ -29,11 +29,12 @@ const server = new Server(
   { capabilities: { tools: {} } }
 );
 
-await bridge.connect();
-registerAllTools(server, bridge, store);
-
-const transport = new StdioServerTransport();
-await server.connect(transport);
+async function start(): Promise<void> {
+  await bridge.connect();
+  registerAllTools(server, bridge, store);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
 
 const shutdown = async () => {
   await bridge.disconnect();
@@ -43,3 +44,8 @@ const shutdown = async () => {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+start().catch((err) => {
+  console.error('[drishti-mcp] startup failed:', err);
+  process.exit(1);
+});

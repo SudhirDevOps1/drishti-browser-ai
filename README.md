@@ -125,7 +125,7 @@ graph TD
 
 ---
 
-## MCP Tools Catalog (55 Tools)
+## MCP Tools Catalog (62 Tools)
 
 Registered tool definitions live in `apps/mcp-server/src/tools/index.ts`; parameter schemas and examples are documented in [docs/mcp-tools-reference.md](docs/mcp-tools-reference.md).
 
@@ -155,10 +155,10 @@ Set up Drishti Browser AI (दृष्टि) for me so you can control my Chro
    - If found **and** `scripts/setup-agent.mjs` is missing, update it in place: `git pull origin main && pnpm install && pnpm -r run build`.
    - Only clone https://github.com/SudhirDevOps1/drishti-browser-ai.git into a dedicated tools folder (NOT inside my current project) if it is not installed yet, then run `pnpm install && pnpm -r run build`.
 2. Inside the Drishti folder, run `pnpm setup:agent -- --client <your_client>` (use your own client name: `antigravity`, `gemini`, `opencode`, `claude`, `cursor`, `codex`, or `auto` to auto-detect installed AI clients):
-   - Auto-generates `.drishti-token` (64-char hex) if missing.
-   - Registers `drishti-browser-ai` in that AI client's MCP config.
-   - Installs `drishti-browser-agent/SKILL.md` into that client's skills directory so it loads automatically.
-3. Start the Local Bridge on-demand (`pnpm bridge:start`) — never install OS auto-start scripts.
+   - Auto-generates a random 64-hex `.drishti-token` if missing (rejects placeholder tokens).
+   - Registers `drishti-browser-ai` (59 MCP tools; supports `DRISHTI_LAZY_TOOLS=1`) in that AI client's MCP config.
+   - Installs `drishti-browser-agent/SKILL.md` (`browser_run`, `browser_task`, `browser_request_human_help`, `browser_audit`) into that client's skills directory so it loads automatically.
+3. Start the Local Bridge on-demand (`pnpm bridge:start`, port `7483`) — never install OS auto-start scripts.
 4. Clean up any temporary setup files; if freshly cloned solely for runtime use (not development), remove non-runtime folders (`apps/web-showcase`, `tests`) after building.
 5. **MUST print the exact 64-character auth token from `.drishti-token` clearly in your final reply to me**, then guide me to paste it in Drishti Settings -> Connection & Bridge -> Save Changes -> Run Ping.
 </DRISHTI_AUTO_INSTALL>

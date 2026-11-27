@@ -1,0 +1,102 @@
+{
+  "version": "1.1",
+  "description": "Deterministic 11-task benchmark suite for Drishti Browser AI MCP reliability (includes multi-step composite flow)",
+  "tasks": [
+    {
+      "id": "T01",
+      "name": "open-url",
+      "description": "Navigate to local HTTP fixture page",
+      "tool": "browser_navigate",
+      "params": { "url": "http://127.0.0.1:9876/fixture.html" },
+      "expect": { "field": "ok", "equals": true }
+    },
+    {
+      "id": "T02",
+      "name": "wait-for-text",
+      "description": "Wait for fixture heading text",
+      "tool": "browser_wait_for",
+      "params": { "text": "Drishti Fixture", "timeout": 5000 },
+      "expect": { "field": "matched", "equals": true }
+    },
+    {
+      "id": "T03",
+      "name": "click-by-text",
+      "description": "Click button by visible text",
+      "tool": "browser_click",
+      "params": { "selector": "button:has-text('Click Me')" },
+      "expect": { "field": "ok", "equals": true }
+    },
+    {
+      "id": "T04",
+      "name": "fill-form",
+      "description": "Fill email input field",
+      "tool": "browser_type",
+      "params": { "selector": "input[name='email']", "text": "agent@drishti.dev" },
+      "expect": { "field": "ok", "equals": true }
+    },
+    {
+      "id": "T05",
+      "name": "extract-table",
+      "description": "Extract structured HTML tables",
+      "tool": "browser_get_tables",
+      "params": {},
+      "expect": { "field": "tables", "minLength": 1 }
+    },
+    {
+      "id": "T06",
+      "name": "extract-links",
+      "description": "Extract page links",
+      "tool": "browser_get_links",
+      "params": {},
+      "expect": { "field": "links", "minLength": 1 }
+    },
+    {
+      "id": "T07",
+      "name": "snapshot",
+      "description": "Take DOM snapshot with @eN refs",
+      "tool": "browser_snapshot",
+      "params": {},
+      "expect": { "field": "elements", "minLength": 1 }
+    },
+    {
+      "id": "T08",
+      "name": "switch-tab",
+      "description": "Switch to active tab via browser_switch_tab",
+      "tool": "browser_switch_tab",
+      "params": { "tabId": "$ACTIVE_TAB" },
+      "expect": { "field": "success", "equals": true }
+    },
+    {
+      "id": "T09",
+      "name": "verify-action",
+      "description": "Verify page state after actions",
+      "tool": "browser_verify_action",
+      "params": { "description": "Drishti Fixture" },
+      "expect": { "field": "verified", "equals": true }
+    },
+    {
+      "id": "T10",
+      "name": "bridge-health",
+      "description": "Check bridge health via browser_bridge_health",
+      "tool": "browser_bridge_health",
+      "params": {},
+      "expect": { "field": "status", "equals": "CONNECTED" }
+    },
+    {
+      "id": "T11",
+      "name": "multi-step-flow",
+      "description": "Composite navigate -> wait_for -> click -> verify -> extract in one browser_run call",
+      "tool": "browser_run",
+      "params": {
+        "steps": [
+          { "action": "navigate", "params": { "url": "http://127.0.0.1:9876/fixture.html" } },
+          { "action": "wait_for", "params": { "text": "Drishti Fixture", "timeout": 5000 } },
+          { "action": "click", "params": { "selector": "button:has-text('Click Me')" } },
+          { "action": "verify", "params": { "description": "Drishti Fixture" } },
+          { "action": "extract", "params": {} }
+        ]
+      },
+      "expect": { "field": "ok", "equals": true }
+    }
+  ]
+}

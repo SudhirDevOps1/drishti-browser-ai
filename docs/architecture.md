@@ -25,7 +25,7 @@ Drishti Browser AI is engineered around five fundamental architectural tenets:
 +------------------------------------+------------------------------------+
 |                      apps/mcp-server (Node.js)                          |
 |  - Official @modelcontextprotocol/sdk Server                            |
-|  - 35 Registered & Validated Tools                                      |
+|  - 62 Registered & Validated Tools                                      |
 |  - Structured Error Handlers & Parameter Validation                     |
 +------------------------------------+------------------------------------+
                                      | In-process bridge client
